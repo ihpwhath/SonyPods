@@ -2,6 +2,9 @@ package dev.sonypods.hook.milink
 
 import android.bluetooth.BluetoothDevice
 import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
 import dev.sonypods.config.ConfigManager
 import dev.sonypods.hook.Log
 import dev.sonypods.hook.callMethod
@@ -9,6 +12,66 @@ import dev.sonypods.hook.getObjectField
 import dev.sonypods.hook.setObjectField
 
 internal class MiLinkSpatialAudioHook(private val hook: MiLinkServiceHook) {
+    fun hookHeadsetUi() {
+        runCatching {
+            hook.hookBefore(hook.findMethod("com.miui.circulate.world.headset.ui.HeadsetControlAncItemView", "performClick")) {
+                val view = instance as? View ?: return@hookBefore
+                val parent = view.parent as? ViewGroup ?: return@hookBefore
+                for (i in 0 until parent.childCount) {
+                    val child = parent.getChildAt(i)
+                    child.isSelected = (child == view)
+                }
+            }
+        }.onFailure { Log.d(MiLinkServiceHook.TAG, "hook HeadsetControlAncItemView.performClick skipped", it) }
+
+        runCatching {
+            hook.hookBefore(hook.findMethod("com.miui.circulate.world.headset.ui.HeadsetControlAncItemView", "setTitle", CharSequence::class.java)) {
+                val title = args[0]?.toString() ?: return@hookBefore
+                when (title) {
+                    "沉浸声" -> args[0] = "电影"
+                    "头部追踪" -> args[0] = "背景"
+                    "关闭" -> {
+                        val view = instance as? View ?: return@hookBefore
+                        val parent = view.parent as? ViewGroup
+                        val isSpatial = parent?.let { p ->
+                            (0 until p.childCount).any { idx ->
+                                val c = p.getChildAt(idx)
+                                val t = runCatching { (callMethod(c, "getTitle") as? TextView)?.text?.toString() }.getOrNull()
+                                t == "电影" || t == "沉浸声" || t == "背景" || t == "头部追踪"
+                            }
+                        } ?: false
+                        if (isSpatial) {
+                            args[0] = "标准"
+                        } else {
+                            view.post {
+                                val p = view.parent as? ViewGroup ?: return@post
+                                val hasSpatial = (0 until p.childCount).any { idx ->
+                                    val c = p.getChildAt(idx)
+                                    val t = runCatching { (callMethod(c, "getTitle") as? TextView)?.text?.toString() }.getOrNull()
+                                    t == "电影" || t == "沉浸声" || t == "背景" || t == "头部追踪"
+                                }
+                                if (hasSpatial) {
+                                    runCatching {
+                                        (callMethod(view, "getTitle") as? TextView)?.text = "标准"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }.onFailure { Log.d(MiLinkServiceHook.TAG, "hook HeadsetControlAncItemView.setTitle skipped", it) }
+
+        runCatching {
+            hook.hookBefore(hook.findMethod("android.widget.TextView", "setText", CharSequence::class.java, TextView.BufferType::class.java)) {
+                val text = args[0]?.toString() ?: return@hookBefore
+                if (text == "空间音频") {
+                    args[0] = "听音模式"
+                }
+            }
+        }.onFailure { Log.d(MiLinkServiceHook.TAG, "hook TextView.setText skipped", it) }
+    }
+
     fun hookMxBluetoothRuntime(classes: List<String>) {
         classes.forEach { className ->
             hook.hookBluetoothDeviceResult(className, "getSpatialMode") { hook.miLinkSpatialMode() }

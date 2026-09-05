@@ -1,6 +1,7 @@
 package dev.sonypods.hook.milink
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
@@ -77,6 +78,7 @@ object MiLinkServiceHook : HookContext() {
         hookMxBluetoothRuntime()
         hookFusionMoreSettings()
         hookHeadsetRuntimeDisplay()
+        spatialAudioHook.hookHeadsetUi()
         spatialAudioHook.hookCirculateHeadsetServiceInfo()
         remoteProtocolHook.hookRemoteProtocol()
         leAudioIdentityHook.hookIdentityUnification()
@@ -394,11 +396,29 @@ object MiLinkServiceHook : HookContext() {
         if (owner != null) lastAncBatteryController = owner
     }
 
+    private fun findBondedSonyDevice(): BluetoothDevice? {
+        return runCatching {
+            val adapter = BluetoothAdapter.getDefaultAdapter() ?: return@runCatching null
+            adapter.bondedDevices?.firstOrNull { dev ->
+                val name = dev.name ?: dev.alias ?: ""
+                name.contains("WH-", ignoreCase = true) ||
+                name.contains("WF-", ignoreCase = true) ||
+                name.contains("Sony", ignoreCase = true) ||
+                name.contains("LinkBuds", ignoreCase = true)
+            }?.also { dev ->
+                if (currentAddress.isNullOrBlank()) {
+                    currentAddress = dev.address
+                    currentName = dev.name ?: dev.alias
+                }
+            }
+        }.getOrNull()
+    }
+
     private fun getOrBuildPersistentAncBatteryModel(device: BluetoothDevice?): Any? {
         loadState()
         val targetDevice = device ?: currentAddress?.let { addr ->
             runCatching { context?.getSystemService(BluetoothManager::class.java)?.adapter?.getRemoteDevice(addr) }.getOrNull()
-        } ?: return null
+        } ?: findBondedSonyDevice() ?: return null
         val cached = cachedAncBatteryModel
         if (cached != null) {
             val same = runCatching { callMethod(cached, "isSameAddress", targetDevice) as? Boolean }.getOrNull()
@@ -703,10 +723,24 @@ object MiLinkServiceHook : HookContext() {
         val resolved = SonyDeviceService.resolveControlAddress(address) ?: address
         val current = currentAddress
         val resolvedCurrent = current?.let { SonyDeviceService.resolveControlAddress(it) } ?: current
-        return SonyDeviceService.isKnownSonyAddress(address) ||
+        if (SonyDeviceService.isKnownSonyAddress(address) ||
             SonyDeviceService.isKnownSonyAddress(resolved) ||
             address.equals(current, ignoreCase = true) ||
-            resolved.equals(resolvedCurrent, ignoreCase = true)
+            resolved.equals(resolvedCurrent, ignoreCase = true)) {
+            return true
+        }
+        return runCatching {
+            val adapter = BluetoothAdapter.getDefaultAdapter() ?: return@runCatching false
+            val dev = adapter.getRemoteDevice(address)
+            val name = dev?.name ?: dev?.alias
+            if (name != null && (name.contains("WH-", ignoreCase = true) || name.contains("WF-", ignoreCase = true) || name.contains("Sony", ignoreCase = true) || name.contains("LinkBuds", ignoreCase = true))) {
+                if (currentAddress.isNullOrBlank()) {
+                    currentAddress = address
+                    currentName = name
+                }
+                true
+            } else false
+        }.getOrDefault(false)
     }
 
     private fun isTargetHeadsetInfo(info: Any?): Boolean {

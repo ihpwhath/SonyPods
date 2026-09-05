@@ -263,12 +263,6 @@ internal fun LazyListScope.podControlItems(
         }
     }
 
-    if (visibility.eq.renderedHere() && uiState.supportsEq) {
-        item {
-            EqCard(uiState = uiState, actions = actions)
-        }
-    }
-
     if (!forMorePage && uiState.supportsListeningMode) {
         item {
             ListeningModeCard(uiState = uiState, actions = actions)
