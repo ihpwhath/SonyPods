@@ -4055,7 +4055,7 @@ class SonyHeadphoneRepository private constructor(
     }
 
     private fun applyCinemaMode(response: ParsedTandemResponse.CinemaMode) {
-        appendLog("Cinema mode ${if (response.isUnsolicited) "NTFY" else "RET"} enabled=${response.enabled}")
+        appendLog("Cinema mode enabled=${response.enabled}")
         _state.update { current ->
             val newCinema = response.enabled
             val currentBgm = current.bgmModeEnabled
@@ -4077,7 +4077,7 @@ class SonyHeadphoneRepository private constructor(
     }
 
     private fun applyBgmMode(response: ParsedTandemResponse.BgmMode) {
-        appendLog("BGM mode ${if (response.isUnsolicited) "NTFY" else "RET"} enabled=${response.enabled} placeCode=${response.placeCode}")
+        appendLog("BGM mode enabled=${response.enabled} placeCode=${response.placeCode}")
         _state.update { current ->
             val newBgm = response.enabled
             val currentCinema = current.cinemaModeEnabled

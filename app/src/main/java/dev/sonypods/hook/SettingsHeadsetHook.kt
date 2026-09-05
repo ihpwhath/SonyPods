@@ -161,7 +161,6 @@ object SettingsHeadsetHook : HookContext() {
                 val intent = activity.intent ?: return@hookAfter
                 val device = intent.parcelableDevice("android.bluetooth.device.extra.DEVICE")
                 if (!isSonyPod(device)) return@hookAfter
-                setupPluginCardUi(activity)
             }
         }.onFailure { Log.d(TAG, "hook MiuiHeadsetActivityPlugin skipped", it) }
     }

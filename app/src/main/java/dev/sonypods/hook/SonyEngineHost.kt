@@ -1980,7 +1980,7 @@ object SonyEngineHost {
         if (command == SonyBridge.CMD_PREEMPT_CONNECTION) {
             Log.d(TAG, "preemption requested; revoking Sound Connect lease and reconnecting")
             clearOfficialAppLease(reconnect = true, reason = "preempt-connection")
-            reconcileConnection("preempt-connection")
+            reconcileConnection()
             return
         }
 
@@ -1992,7 +1992,7 @@ object SonyEngineHost {
             )) {
             Log.d(TAG, "command=$command received while officialAppOwnsTandem; auto-preempting")
             clearOfficialAppLease(reconnect = true, reason = "preempt-for-$command")
-            reconcileConnection("preempt-for-$command")
+            reconcileConnection()
         }
 
         val repo = repository ?: return
