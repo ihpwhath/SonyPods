@@ -14,22 +14,17 @@ import dev.sonypods.hook.setObjectField
 internal class MiLinkSpatialAudioHook(private val hook: MiLinkServiceHook) {
     fun hookHeadsetUi() {
         runCatching {
-            hook.hookBefore(hook.findMethod("android.view.View", "setOnClickListener", View.OnClickListener::class.java)) {
-                val v = instance as? View ?: return@hookBefore
-                if (v.javaClass.name != "com.miui.circulate.world.headset.ui.HeadsetControlAncItemView") return@hookBefore
-                val original = args.firstOrNull() as? View.OnClickListener ?: return@hookBefore
-                args[0] = View.OnClickListener { clicked ->
-                    val p = clicked.parent as? ViewGroup
-                    if (p != null) {
-                        for (i in 0 until p.childCount) {
-                            val sibling = p.getChildAt(i)
-                            sibling.isSelected = (sibling === clicked)
-                        }
-                    }
-                    original.onClick(clicked)
+            hook.hookBefore(hook.findMethod("android.view.View", "performClick")) {
+                val view = instance as? View ?: return@hookBefore
+                if (view.javaClass.name != "com.miui.circulate.world.headset.ui.HeadsetControlAncItemView") return@hookBefore
+                val parent = view.parent as? ViewGroup ?: return@hookBefore
+                for (i in 0 until parent.childCount) {
+                    val child = parent.getChildAt(i)
+                    child.isSelected = (child === view)
                 }
             }
-        }.onFailure { Log.d(MiLinkServiceHook.TAG, "hook View.setOnClickListener skipped", it) }
+        }.onFailure { Log.d(MiLinkServiceHook.TAG, "hook View.performClick skipped", it) }
+
 
         runCatching {
             hook.hookAfter(hook.findMethod("android.widget.TextView", "setText", CharSequence::class.java, TextView.BufferType::class.java)) {

@@ -84,10 +84,13 @@ object SoundConnectHandoverHook : HookContext() {
             }
         }.onFailure { Log.d(TAG, "hook Application.onCreate skipped", it) }
 
-        val currentApp = currentApplicationContext() as? Application
-        if (currentApp != null) {
-            runCatching { install(currentApp) }
+        runCatching {
+            val app = Class.forName("android.app.ActivityThread")
+                .getDeclaredMethod("currentApplication")
+                .invoke(null) as? Application
+            if (app != null) install(app)
         }
+
 
         runCatching {
             hookBefore(findMethod("android.bluetooth.BluetoothSocket", "connect")) {
