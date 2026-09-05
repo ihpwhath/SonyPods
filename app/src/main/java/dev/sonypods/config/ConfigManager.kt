@@ -140,6 +140,7 @@ data class AppConfig(
      * swallows a system pairing prompt.
      */
     val ignoreRandomLePairingRequests: Boolean = false,
+    val rememberedBgmPlaceCode: Int = 0,
     val visibility: VisibilityConfig = VisibilityConfig(),
 )
 
@@ -395,6 +396,10 @@ object ConfigManager {
 
     fun updateScSafeListeningMode(mode: Int) = save {
         it.copy(scSafeListeningMode = mode.coerceIn(SC_SL_MODE_UNKNOWN, SC_SL_MODE_ON))
+    }
+
+    fun updateRememberedBgmPlaceCode(placeCode: Int) = save {
+        it.copy(rememberedBgmPlaceCode = placeCode.coerceIn(0, 2))
     }
 
     /** Mutate, normalize, cache, and persist the config to the cross-process store. */

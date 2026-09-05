@@ -76,6 +76,25 @@ object SoundConnectHandoverHook : HookContext() {
                     .onFailure { Log.w(TAG, "failed to initialize Sound Connect handover", it) }
             }
         }.onFailure { Log.w(TAG, "failed to install Sound Connect handover hook", it) }
+
+        runCatching {
+            hookAfter(findMethod("android.app.Application", "onCreate")) {
+                val application = instance as? Application ?: return@hookAfter
+                runCatching { install(application) }
+            }
+        }.onFailure { Log.d(TAG, "hook Application.onCreate skipped", it) }
+
+        val currentApp = currentApplicationContext() as? Application
+        if (currentApp != null) {
+            runCatching { install(currentApp) }
+        }
+
+        runCatching {
+            hookBefore(findMethod("android.bluetooth.BluetoothSocket", "connect")) {
+                leaseCoordinator?.reassertForced("bluetooth-socket-connect")
+                Thread.sleep(200)
+            }
+        }.onFailure { Log.d(TAG, "hook BluetoothSocket.connect skipped", it) }
     }
 
     @Synchronized
@@ -328,6 +347,13 @@ object SoundConnectHandoverHook : HookContext() {
             }
         }
 
+        fun reassertForced(reason: String) {
+            synchronized(this) {
+                cancelPendingReleaseLocked()
+                reassertLocked(reason)
+            }
+        }
+
         private fun reconcileLocked(reason: String) {
             if (hasActiveHoldLocked()) {
                 cancelPendingReleaseLocked()
@@ -339,7 +365,9 @@ object SoundConnectHandoverHook : HookContext() {
 
         private fun hasActiveHoldLocked(): Boolean =
             creatingActivities.isNotEmpty() ||
-                startedActivities.isNotEmpty()
+                startedActivities.isNotEmpty() ||
+                activeKeepConnectionServices.isNotEmpty() ||
+                activeMdrControllers.isNotEmpty()
 
         private fun holdSummaryLocked(): String =
             "creating=${creatingActivities.size} started=${startedActivities.size} " +

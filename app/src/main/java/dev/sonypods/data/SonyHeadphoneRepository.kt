@@ -4097,6 +4097,9 @@ class SonyHeadphoneRepository private constructor(
                 listeningMode = computedMode,
             )
         }
+        if (response.enabled) {
+            ConfigManager.updateRememberedBgmPlaceCode(response.placeCode)
+        }
     }
 
     fun setListeningMode(mode: dev.sonypods.protocol.ListeningMode) {
@@ -4104,6 +4107,15 @@ class SonyHeadphoneRepository private constructor(
         if (!profile.supports(HeadphoneFeature.LISTENING_MODE)) {
             appendLog("Listening mode write is disabled for current profile")
             return
+        }
+        if (mode.isBgm) {
+            val placeCode = when (mode) {
+                dev.sonypods.protocol.ListeningMode.BGM_MY_ROOM -> 0
+                dev.sonypods.protocol.ListeningMode.BGM_LIVING_ROOM -> 1
+                dev.sonypods.protocol.ListeningMode.BGM_CAFE -> 2
+                else -> 0
+            }
+            ConfigManager.updateRememberedBgmPlaceCode(placeCode)
         }
         _state.update { current ->
             current.copy(

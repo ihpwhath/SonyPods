@@ -318,7 +318,7 @@ object SonyTandemV2Table1Protocol {
         SonyTandemFrame.message(AUDIO_GET_PARAM, byteArrayOf(AUDIO_INQ_UPMIX_CINEMA))
 
     fun buildSetCinemaMode(enabled: Boolean): ByteArray =
-        SonyTandemFrame.message(AUDIO_SET_PARAM, byteArrayOf(AUDIO_INQ_UPMIX_CINEMA, if (enabled) 0x01 else 0x00))
+        SonyTandemFrame.message(AUDIO_SET_PARAM, byteArrayOf(AUDIO_INQ_UPMIX_CINEMA, if (enabled) 0x00 else 0x01))
 
     fun buildGetBgmMode(): ByteArray =
         SonyTandemFrame.message(AUDIO_GET_PARAM, byteArrayOf(AUDIO_INQ_BGM_MODE))
@@ -1467,7 +1467,7 @@ object SonyTandemV2Table1Protocol {
             -> parseUpscalingParam(payload, raw, isUnsolicited)
 
             AUDIO_INQ_UPMIX_CINEMA.unsigned -> {
-                val enabled = payload.getOrNull(1) == 0x01.toByte()
+                val enabled = payload.getOrNull(1) == 0x00.toByte()
                 ParsedTandemResponse.CinemaMode(enabled, raw)
             }
 

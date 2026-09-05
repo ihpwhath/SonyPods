@@ -14,53 +14,93 @@ import dev.sonypods.hook.setObjectField
 internal class MiLinkSpatialAudioHook(private val hook: MiLinkServiceHook) {
     fun hookHeadsetUi() {
         runCatching {
-            hook.hookBefore(hook.findMethod("com.miui.circulate.world.headset.ui.HeadsetControlAncItemView", "performClick")) {
-                val view = instance as? View ?: return@hookBefore
-                val parent = view.parent as? ViewGroup ?: return@hookBefore
-                for (i in 0 until parent.childCount) {
-                    val child = parent.getChildAt(i)
-                    child.isSelected = (child == view)
-                }
-            }
-        }.onFailure { Log.d(MiLinkServiceHook.TAG, "hook HeadsetControlAncItemView.performClick skipped", it) }
-
-        runCatching {
-            hook.hookAfter(hook.findMethod("com.miui.circulate.world.headset.ui.HeadsetControlAncItemView", "setTitle", CharSequence::class.java)) {
-                val view = instance as? View ?: return@hookAfter
-                val titleView = runCatching { callMethod(view, "getTitle") as? TextView }.getOrNull() ?: return@hookAfter
-                val text = titleView.text?.toString() ?: return@hookAfter
-                when (text) {
-                    "沉浸声" -> titleView.text = "电影"
-                    "头部追踪" -> titleView.text = "背景"
-                    "关闭" -> {
-                        val updateStandard: () -> Unit = {
-                            val p = view.parent as? ViewGroup
-                            val hasSpatial = p != null && (0 until p.childCount).any { idx ->
-                                val c = p.getChildAt(idx)
-                                if (c != view) {
-                                    val t = runCatching { (callMethod(c, "getTitle") as? TextView)?.text?.toString() }.getOrNull()
-                                    t == "电影" || t == "沉浸声" || t == "背景" || t == "头部追踪"
-                                } else false
-                            }
-                            if (hasSpatial) {
-                                titleView.text = "标准"
-                            }
+            hook.hookBefore(hook.findMethod("android.view.View", "setOnClickListener", View.OnClickListener::class.java)) {
+                val v = instance as? View ?: return@hookBefore
+                if (v.javaClass.name != "com.miui.circulate.world.headset.ui.HeadsetControlAncItemView") return@hookBefore
+                val original = args.firstOrNull() as? View.OnClickListener ?: return@hookBefore
+                args[0] = View.OnClickListener { clicked ->
+                    val p = clicked.parent as? ViewGroup
+                    if (p != null) {
+                        for (i in 0 until p.childCount) {
+                            val sibling = p.getChildAt(i)
+                            sibling.isSelected = (sibling === clicked)
                         }
-                        updateStandard()
-                        view.post(updateStandard)
                     }
+                    original.onClick(clicked)
                 }
             }
-        }.onFailure { Log.d(MiLinkServiceHook.TAG, "hook HeadsetControlAncItemView.setTitle skipped", it) }
+        }.onFailure { Log.d(MiLinkServiceHook.TAG, "hook View.setOnClickListener skipped", it) }
 
         runCatching {
             hook.hookAfter(hook.findMethod("android.widget.TextView", "setText", CharSequence::class.java, TextView.BufferType::class.java)) {
                 val tv = instance as? TextView ?: return@hookAfter
-                if (tv.text?.toString() == "空间音频") {
-                    tv.text = "听音模式"
+                val raw = tv.text?.toString() ?: return@hookAfter
+                when (raw) {
+                    "空间音频" -> tv.text = "听音模式"
+                    "沉浸声" -> tv.text = "电影"
+                    "头部追踪" -> tv.text = "背景音乐"
+                    "关闭" -> {
+                        if (isSpatialCloseButton(tv)) {
+                            tv.text = "标准"
+                        } else {
+                            tv.post {
+                                if (isSpatialCloseButton(tv)) {
+                                    tv.text = "标准"
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }.onFailure { Log.d(MiLinkServiceHook.TAG, "hook TextView.setText skipped", it) }
+    }
+
+    private fun isSpatialCloseButton(tv: TextView): Boolean {
+        var p: View? = tv.parent as? View
+        var depth = 0
+        while (p != null && depth < 3) {
+            if (p is ViewGroup && !p.javaClass.name.contains("HeadSetsDetail") && p.id != android.R.id.content) {
+                var hasSpatial = false
+                var hasAnc = false
+                for (i in 0 until p.childCount) {
+                    val c = p.getChildAt(i)
+                    if (containsSpatialKeyword(c)) hasSpatial = true
+                    if (containsAncKeyword(c)) hasAnc = true
+                }
+                if (hasSpatial && !hasAnc) return true
+                if (hasAnc) return false
+            }
+            p = p.parent as? View
+            depth++
+        }
+        return false
+    }
+
+
+    private fun containsSpatialKeyword(v: View): Boolean {
+        if (v is TextView) {
+            val t = v.text?.toString() ?: ""
+            if (t == "电影" || t == "沉浸声" || t == "背景音乐" || t == "头部追踪" || t == "听音模式") return true
+        }
+        if (v is ViewGroup) {
+            for (i in 0 until v.childCount) {
+                if (containsSpatialKeyword(v.getChildAt(i))) return true
+            }
+        }
+        return false
+    }
+
+    private fun containsAncKeyword(v: View): Boolean {
+        if (v is TextView) {
+            val t = v.text?.toString() ?: ""
+            if (t == "通透" || t == "降噪" || t == "噪声控制") return true
+        }
+        if (v is ViewGroup) {
+            for (i in 0 until v.childCount) {
+                if (containsAncKeyword(v.getChildAt(i))) return true
+            }
+        }
+        return false
     }
 
     fun hookMxBluetoothRuntime(classes: List<String>) {
