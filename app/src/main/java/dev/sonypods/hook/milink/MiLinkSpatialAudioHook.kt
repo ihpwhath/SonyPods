@@ -25,48 +25,39 @@ internal class MiLinkSpatialAudioHook(private val hook: MiLinkServiceHook) {
         }.onFailure { Log.d(MiLinkServiceHook.TAG, "hook HeadsetControlAncItemView.performClick skipped", it) }
 
         runCatching {
-            hook.hookBefore(hook.findMethod("com.miui.circulate.world.headset.ui.HeadsetControlAncItemView", "setTitle", CharSequence::class.java)) {
-                val title = args[0]?.toString() ?: return@hookBefore
-                when (title) {
-                    "沉浸声" -> args[0] = "电影"
-                    "头部追踪" -> args[0] = "背景"
+            hook.hookAfter(hook.findMethod("com.miui.circulate.world.headset.ui.HeadsetControlAncItemView", "setTitle", CharSequence::class.java)) {
+                val view = instance as? View ?: return@hookAfter
+                val titleView = runCatching { callMethod(view, "getTitle") as? TextView }.getOrNull() ?: return@hookAfter
+                val text = titleView.text?.toString() ?: return@hookAfter
+                when (text) {
+                    "沉浸声" -> titleView.text = "电影"
+                    "头部追踪" -> titleView.text = "背景"
                     "关闭" -> {
-                        val view = instance as? View ?: return@hookBefore
-                        val parent = view.parent as? ViewGroup
-                        val isSpatial = parent?.let { p ->
-                            (0 until p.childCount).any { idx ->
+                        val updateStandard: () -> Unit = {
+                            val p = view.parent as? ViewGroup
+                            val hasSpatial = p != null && (0 until p.childCount).any { idx ->
                                 val c = p.getChildAt(idx)
-                                val t = runCatching { (callMethod(c, "getTitle") as? TextView)?.text?.toString() }.getOrNull()
-                                t == "电影" || t == "沉浸声" || t == "背景" || t == "头部追踪"
-                            }
-                        } ?: false
-                        if (isSpatial) {
-                            args[0] = "标准"
-                        } else {
-                            view.post {
-                                val p = view.parent as? ViewGroup ?: return@post
-                                val hasSpatial = (0 until p.childCount).any { idx ->
-                                    val c = p.getChildAt(idx)
+                                if (c != view) {
                                     val t = runCatching { (callMethod(c, "getTitle") as? TextView)?.text?.toString() }.getOrNull()
                                     t == "电影" || t == "沉浸声" || t == "背景" || t == "头部追踪"
-                                }
-                                if (hasSpatial) {
-                                    runCatching {
-                                        (callMethod(view, "getTitle") as? TextView)?.text = "标准"
-                                    }
-                                }
+                                } else false
+                            }
+                            if (hasSpatial) {
+                                titleView.text = "标准"
                             }
                         }
+                        updateStandard()
+                        view.post(updateStandard)
                     }
                 }
             }
         }.onFailure { Log.d(MiLinkServiceHook.TAG, "hook HeadsetControlAncItemView.setTitle skipped", it) }
 
         runCatching {
-            hook.hookBefore(hook.findMethod("android.widget.TextView", "setText", CharSequence::class.java, TextView.BufferType::class.java)) {
-                val text = args[0]?.toString() ?: return@hookBefore
-                if (text == "空间音频") {
-                    args[0] = "听音模式"
+            hook.hookAfter(hook.findMethod("android.widget.TextView", "setText", CharSequence::class.java, TextView.BufferType::class.java)) {
+                val tv = instance as? TextView ?: return@hookAfter
+                if (tv.text?.toString() == "空间音频") {
+                    tv.text = "听音模式"
                 }
             }
         }.onFailure { Log.d(MiLinkServiceHook.TAG, "hook TextView.setText skipped", it) }
