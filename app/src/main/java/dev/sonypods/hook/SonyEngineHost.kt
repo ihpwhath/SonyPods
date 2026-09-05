@@ -1989,6 +1989,10 @@ object SonyEngineHost {
                 SonyBridge.CMD_SURFACES_READY,
                 SonyBridge.CMD_IMAGE_READY,
                 SonyBridge.CMD_PREEMPT_CONNECTION,
+                SonyBridge.CMD_REFRESH,
+                SonyBridge.CMD_CLOUD_MODEL_INFO_READY,
+                SonyBridge.CMD_SL_POLL_START,
+                SonyBridge.CMD_SL_POLL_STOP,
             )) {
             Log.d(TAG, "command=$command received while officialAppOwnsTandem; auto-preempting")
             clearOfficialAppLease(reconnect = true, reason = "preempt-for-$command")

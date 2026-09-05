@@ -247,17 +247,66 @@ object MiLinkServiceHook : HookContext() {
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetInfo constructor skipped", it) }
+        hookHeadSetsDetailLayout()
+    }
+
+    private fun hookHeadSetsDetailLayout() {
+        val detailClass = "com.miui.circulateplus.world.headset.HeadSetsDetail"
         runCatching {
-            hookAfter(findMethodByParamCount("com.miui.circulateplus.world.headset.HeadSetsDetail", "onAttachedToWindow", 0)) {
+            hookAfter(findMethod(detailClass, "onAttachedToWindow")) {
                 val view = instance as? android.view.ViewGroup ?: return@hookAfter
-                val lp = view.layoutParams
-                if (lp != null && lp.height > 0) {
-                    lp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                    view.layoutParams = lp
-                }
-                view.setPadding(view.paddingLeft, 0, view.paddingRight, 0)
+                tightenHeadsetCard(view)
+                view.post { tightenHeadsetCard(view) }
             }
         }.onFailure { Log.d(TAG, "hook HeadSetsDetail.onAttachedToWindow skipped", it) }
+
+        runCatching {
+            hookAfter(findMethod(detailClass, "onFinishInflate")) {
+                val view = instance as? android.view.ViewGroup ?: return@hookAfter
+                tightenHeadsetCard(view)
+                view.post { tightenHeadsetCard(view) }
+            }
+        }.onFailure { Log.d(TAG, "hook HeadSetsDetail.onFinishInflate skipped", it) }
+
+        runCatching {
+            hookAfter(findMethod("android.view.View", "onAttachedToWindow")) {
+                val view = instance as? android.view.ViewGroup ?: return@hookAfter
+                if (view.javaClass.name == detailClass) {
+                    tightenHeadsetCard(view)
+                    view.post { tightenHeadsetCard(view) }
+                }
+            }
+        }.onFailure { Log.d(TAG, "hook View.onAttachedToWindow for HeadSetsDetail skipped", it) }
+    }
+
+    private fun tightenHeadsetCard(view: android.view.View) {
+        val root = view as? android.view.ViewGroup ?: return
+        runCatching {
+            root.layoutParams?.let { lp ->
+                if (lp.height != android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {
+                    lp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                    root.layoutParams = lp
+                }
+            }
+            shrinkChildrenToWrapContent(root)
+            root.setPadding(root.paddingLeft, 0, root.paddingRight, 0)
+            root.requestLayout()
+        }
+    }
+
+    private fun shrinkChildrenToWrapContent(view: android.view.View) {
+        if (view !is android.view.ViewGroup) return
+        val lp = view.layoutParams
+        if (lp != null) {
+            if (view is android.widget.ScrollView ||
+                (view is android.widget.LinearLayout && (lp.height > 0 || lp.height == android.view.ViewGroup.LayoutParams.MATCH_PARENT))) {
+                lp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                view.layoutParams = lp
+            }
+        }
+        for (i in 0 until view.childCount) {
+            shrinkChildrenToWrapContent(view.getChildAt(i))
+        }
     }
 
     /**
@@ -1096,6 +1145,41 @@ object MiLinkServiceHook : HookContext() {
         )
     }
 
+    private fun isSonyCirculateService(serviceInfo: Any?): Boolean {
+        if (serviceInfo == null) return false
+        loadState()
+        val serviceId = runCatching { getObjectField(serviceInfo, "serviceId") as? String }.getOrNull()
+        if (!serviceId.isNullOrBlank()) {
+            if (serviceId.contains("索尼", ignoreCase = true) ||
+                serviceId.contains("Sony", ignoreCase = true) ||
+                serviceId.contains("WH-", ignoreCase = true) ||
+                serviceId.contains("WF-", ignoreCase = true) ||
+                serviceId.contains("LinkBuds", ignoreCase = true) ||
+                serviceId.equals(currentName, ignoreCase = true)) {
+                return true
+            }
+        }
+        val deviceId = runCatching { getObjectField(serviceInfo, "deviceId") as? String }.getOrNull()
+        if (!deviceId.isNullOrBlank()) {
+            if (isSonyAddress(deviceId) || deviceId.equals(currentAddress, ignoreCase = true)) return true
+        }
+        val props = runCatching { getObjectField(serviceInfo, "serviceProperties") }.getOrNull()
+        val extra = runCatching {
+            callMethod(props, "getAll") as? android.os.Bundle
+                ?: getObjectField(props, "extraBundle") as? android.os.Bundle
+        }.getOrNull()
+        if (extra != null) {
+            val hid = extra.getString("headset_id")
+            if (hid == "01013A04" || hid?.startsWith("0101") == true) return true
+            val addr = extra.getString("device_address") ?: extra.getString("address")
+            if (addr != null && isSonyAddress(addr)) return true
+        }
+        if (!currentAddress.isNullOrBlank() || !currentName.isNullOrBlank()) {
+            return true
+        }
+        return false
+    }
+
     private fun hookHeadsetServiceController() {
         val controllerClass = "com.miui.circulate.api.protocol.headset.HeadsetServiceController"
         val serviceInfoClass = "com.miui.circulate.api.service.CirculateServiceInfo"
@@ -1104,8 +1188,7 @@ object MiLinkServiceHook : HookContext() {
         runCatching {
             hookBefore(findMethod(controllerClass, "refreshHeadsetProperty", findClass(serviceInfoClass))) {
                 val serviceInfo = args.firstOrNull() ?: return@hookBefore
-                val deviceId = getObjectField(serviceInfo, "deviceId") as? String
-                if (deviceId != null && (isSonyAddress(deviceId) || deviceId == currentAddress)) {
+                if (isSonyCirculateService(serviceInfo)) {
                     captureRuntimeContext(instance)
                     ensureAncBatteryModel(notify = false)
                     this.result = java.util.concurrent.CompletableFuture.completedFuture(100)
@@ -1116,8 +1199,7 @@ object MiLinkServiceHook : HookContext() {
         runCatching {
             hookBefore(findMethod(controllerClass, "isMmaHeadset", findClass(deviceInfoClass), findClass(serviceInfoClass))) {
                 val serviceInfo = args.getOrNull(1) ?: return@hookBefore
-                val deviceId = getObjectField(serviceInfo, "deviceId") as? String
-                if (deviceId != null && (isSonyAddress(deviceId) || deviceId == currentAddress)) {
+                if (isSonyCirculateService(serviceInfo)) {
                     this.result = java.util.concurrent.CompletableFuture.completedFuture(false)
                 }
             }
@@ -1126,8 +1208,7 @@ object MiLinkServiceHook : HookContext() {
         runCatching {
             hookBefore(findMethod(controllerClass, "setNoiseCancelling", findClass(serviceInfoClass), Int::class.javaPrimitiveType!!)) {
                 val serviceInfo = args.firstOrNull() ?: return@hookBefore
-                val deviceId = getObjectField(serviceInfo, "deviceId") as? String
-                if (deviceId != null && (isSonyAddress(deviceId) || deviceId == currentAddress)) {
+                if (isSonyCirculateService(serviceInfo)) {
                     val miLinkMode = args[1] as? Int ?: 0
                     val sonyAnc = sonyAncFromMiLink(miLinkMode)
                     currentAnc = sonyAnc
@@ -1145,8 +1226,7 @@ object MiLinkServiceHook : HookContext() {
         runCatching {
             hookBefore(findMethod(controllerClass, "setAudioEffect", findClass(serviceInfoClass), Int::class.javaPrimitiveType!!)) {
                 val serviceInfo = args.firstOrNull() ?: return@hookBefore
-                val deviceId = getObjectField(serviceInfo, "deviceId") as? String
-                if (deviceId != null && (isSonyAddress(deviceId) || deviceId == currentAddress)) {
+                if (isSonyCirculateService(serviceInfo)) {
                     val miLinkMode = args[1] as? Int ?: 0
                     val mode = spatialModeFromMiLink(miLinkMode)
                     updateSpatialAudioMode(mode)
@@ -1158,8 +1238,7 @@ object MiLinkServiceHook : HookContext() {
         runCatching {
             hookBefore(findMethod(controllerClass, "getTargetBondStatus", findClass(deviceInfoClass), findClass(serviceInfoClass))) {
                 val serviceInfo = args.getOrNull(1) ?: return@hookBefore
-                val deviceId = getObjectField(serviceInfo, "deviceId") as? String
-                if (deviceId != null && (isSonyAddress(deviceId) || deviceId == currentAddress)) {
+                if (isSonyCirculateService(serviceInfo)) {
                     this.result = java.util.concurrent.CompletableFuture.completedFuture(1)
                 }
             }
@@ -1168,11 +1247,37 @@ object MiLinkServiceHook : HookContext() {
         runCatching {
             hookBefore(findMethod(controllerClass, "getSupportAncMode", findClass(serviceInfoClass))) {
                 val serviceInfo = args.firstOrNull() ?: return@hookBefore
-                val deviceId = getObjectField(serviceInfo, "deviceId") as? String
-                if (deviceId != null && (isSonyAddress(deviceId) || deviceId == currentAddress)) {
+                if (isSonyCirculateService(serviceInfo)) {
                     this.result = java.util.concurrent.CompletableFuture.completedFuture(1)
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.getSupportAncMode skipped", it) }
+
+        runCatching {
+            hookBefore(findMethod(controllerClass, "getBluetoothDeviceMode", findClass(serviceInfoClass))) {
+                val serviceInfo = args.firstOrNull() ?: return@hookBefore
+                if (isSonyCirculateService(serviceInfo)) {
+                    this.result = miLinkAncState()
+                }
+            }
+        }.onFailure { Log.d(TAG, "hook HeadsetServiceController.getBluetoothDeviceMode skipped", it) }
+
+        runCatching {
+            hookBefore(findMethod(controllerClass, "getBluetoothDeviceAudioEffect", findClass(serviceInfoClass))) {
+                val serviceInfo = args.firstOrNull() ?: return@hookBefore
+                if (isSonyCirculateService(serviceInfo)) {
+                    this.result = miLinkSpatialMode()
+                }
+            }
+        }.onFailure { Log.d(TAG, "hook HeadsetServiceController.getBluetoothDeviceAudioEffect skipped", it) }
+
+        runCatching {
+            hookBefore(findMethod(controllerClass, "getBluetoothDeviceBattery", findClass(serviceInfoClass))) {
+                val serviceInfo = args.firstOrNull() ?: return@hookBefore
+                if (isSonyCirculateService(serviceInfo)) {
+                    this.result = java.util.ArrayList(miLinkBatteryLevels())
+                }
+            }
+        }.onFailure { Log.d(TAG, "hook HeadsetServiceController.getBluetoothDeviceBattery skipped", it) }
     }
 }
