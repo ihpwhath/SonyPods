@@ -1977,13 +1977,22 @@ object SonyEngineHost {
             return
         }
 
+        if (command == SonyBridge.CMD_PREEMPT_CONNECTION) {
+            Log.d(TAG, "preemption requested; revoking Sound Connect lease and reconnecting")
+            clearOfficialAppLease(reconnect = true, reason = "preempt-connection")
+            reconcileConnection("preempt-connection")
+            return
+        }
+
         if (officialAppOwnsTandem && command !in setOf(
                 SonyBridge.CMD_REPUBLISH,
                 SonyBridge.CMD_SURFACES_READY,
                 SonyBridge.CMD_IMAGE_READY,
+                SonyBridge.CMD_PREEMPT_CONNECTION,
             )) {
-            Log.d(TAG, "command=$command skipped while Sound Connect owns Tandem")
-            return
+            Log.d(TAG, "command=$command received while officialAppOwnsTandem; auto-preempting")
+            clearOfficialAppLease(reconnect = true, reason = "preempt-for-$command")
+            reconcileConnection("preempt-for-$command")
         }
 
         val repo = repository ?: return
@@ -2116,6 +2125,15 @@ object SonyEngineHost {
                 repo.setLeAudioEnabled(intent.getBooleanExtra(SonyBridge.EXTRA_BOOL, false))
             SonyBridge.CMD_SET_UPSCALING_ENABLED ->
                 repo.setUpscalingEnabled(intent.getBooleanExtra(SonyBridge.EXTRA_BOOL, false))
+            SonyBridge.CMD_SET_LISTENING_MODE -> {
+                val modeName = intent.getStringExtra(SonyBridge.EXTRA_STRING)
+                val mode = runCatching {
+                    dev.sonypods.protocol.ListeningMode.valueOf(modeName.orEmpty())
+                }.getOrNull()
+                if (mode != null) {
+                    repo.setListeningMode(mode)
+                }
+            }
             SonyBridge.CMD_SET_CONNECTION_QUALITY -> {
                 val modeName = intent.getStringExtra(SonyBridge.EXTRA_STRING)
                 val mode = runCatching {

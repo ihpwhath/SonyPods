@@ -3,6 +3,7 @@ import com.mercury.sonypods.R
 import dev.sonypods.utils.ModuleText
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -10,11 +11,15 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
 import android.content.res.Resources
+import android.graphics.Color
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.TextView
 import com.mercury.sonypods.BuildConfig
 import dev.sonypods.bridge.SonyBridge
@@ -22,6 +27,7 @@ import dev.sonypods.bridge.SonyStateSnapshot
 import dev.sonypods.config.ConfigManager
 import dev.sonypods.device.SonyDeviceService
 import dev.sonypods.headphones.HeadphoneFormFactor
+import dev.sonypods.protocol.ListeningMode
 import dev.sonypods.protocol.DseeGeneration
 import dev.sonypods.protocol.NoiseControlMode
 import dev.sonypods.protocol.SoundQualityCodec
@@ -50,6 +56,7 @@ object SettingsHeadsetHook : HookContext() {
     private var reloadBatteryLabelOriginals: WeakHashMap<TextView, CharSequence>? = null
     private var hasLiveSnapshot = false
     private var isConnectedState = false
+    private var isProtocolReady = false
     private var hasAncState = false
     private var context: Context? = null
     private var receiverRegistered = false
@@ -66,6 +73,9 @@ object SettingsHeadsetHook : HookContext() {
     private var currentDseeActive = false
     private var currentLeaStreamingL: String? = null
     private var currentLeaStreamingR: String? = null
+    private var currentListeningMode: ListeningMode = ListeningMode.STANDARD
+    private var supportsListeningMode = false
+    private val activeListeningModePills = mutableListOf<TextView>()
     private var proxyCheckSupportCalls = 0
     private var proxySetCommonCommandCalls = 0
     private var proxyGetDeviceConfigCalls = 0
@@ -78,6 +88,7 @@ object SettingsHeadsetHook : HookContext() {
         hookServiceProxy()
         hookBatteryView()
         hookFragmentState()
+        hookMoreSettingsRedirect()
     }
 
     override fun onBeforeReload() {
@@ -118,6 +129,7 @@ object SettingsHeadsetHook : HookContext() {
             hookBefore(findMethod("com.android.settings.bluetooth.MiuiHeadsetActivity", "onCreate", Bundle::class.java)) {
                 val activity = instance as? Context ?: return@hookBefore
                 registerStatusReceiver(activity)
+                SonyBridge.preemptConnection(activity)
                 val intent = callMethod(instance, "getIntent") as? Intent ?: return@hookBefore
                 val device = intent.parcelableDevice("android.bluetooth.device.extra.DEVICE")
                 Log.d(TAG, "Activity.onCreate before device=${device.describe()} support=${intent.getStringExtra("MIUI_HEADSET_SUPPORT")} comeFrom=${intent.getStringExtra("COME_FROM")} btAddress=${intent.getStringExtra("bluetoothaddress")} known=${SonyDeviceService.knownAddressSnapshot()} current=$currentAddress")
@@ -135,6 +147,7 @@ object SettingsHeadsetHook : HookContext() {
             hookBefore(findMethod("com.android.settings.bluetooth.MiuiHeadsetActivityPlugin", "onCreate", Bundle::class.java)) {
                 val activity = instance as? Context ?: return@hookBefore
                 registerStatusReceiver(activity)
+                SonyBridge.preemptConnection(activity)
                 val intent = callMethod(instance, "getIntent") as? Intent ?: return@hookBefore
                 val device = intent.parcelableDevice("android.bluetooth.device.extra.DEVICE")
                 Log.d(TAG, "Plugin.onCreate before device=${device.describe()} support=${intent.getStringExtra("MIUI_HEADSET_SUPPORT")} comeFrom=${intent.getStringExtra("COME_FROM")} btAddress=${intent.getStringExtra("bluetoothaddress")} known=${SonyDeviceService.knownAddressSnapshot()} current=$currentAddress")
@@ -142,6 +155,13 @@ object SettingsHeadsetHook : HookContext() {
                 intent.putExtra("MIUI_HEADSET_SUPPORT", fakeSupport())
                 intent.putExtra("DEVICE_ID", fakeDeviceId())
                 Log.d(TAG, "MiuiHeadsetActivityPlugin intent patched address=${device?.address}")
+            }
+            hookAfter(findMethod("com.android.settings.bluetooth.MiuiHeadsetActivityPlugin", "onCreate", Bundle::class.java)) {
+                val activity = instance as? Activity ?: return@hookAfter
+                val intent = activity.intent ?: return@hookAfter
+                val device = intent.parcelableDevice("android.bluetooth.device.extra.DEVICE")
+                if (!isSonyPod(device)) return@hookAfter
+                setupPluginCardUi(activity)
             }
         }.onFailure { Log.d(TAG, "hook MiuiHeadsetActivityPlugin skipped", it) }
     }
@@ -162,7 +182,9 @@ object SettingsHeadsetHook : HookContext() {
         hookStringStaticResult("com.android.settings.bluetooth.HeadsetIDConstants", "checkSupport") { support ->
             support.startsWith(fakeDeviceId()) || support.contains(fakeDeviceId())
         }
-        hookStringStaticResult("com.android.settings.bluetooth.HeadsetIDConstants", "isTWS01Headset") { it == fakeDeviceId() }
+        hookStringStaticResult("com.android.settings.bluetooth.HeadsetIDConstants", "isTWS01Headset") {
+            if (isOverEar()) false else it == fakeDeviceId()
+        }
         hookStringStaticResult("com.android.settings.bluetooth.HeadsetIDConstants", "isK77sHeadset") { false }
         hookBleMmaConnectByContext()
         hookBleMmaConnectByService()
@@ -363,6 +385,7 @@ object SettingsHeadsetHook : HookContext() {
                 instance?.let { headsetFragments[it] = true }
                 requestBluetoothStatus("fragment-create")
                 injectFragmentStatus(instance)
+                purgeOverEarPreferences(instance)
             }
         }.onFailure { Log.d(TAG, "hook MiuiHeadsetFragment.onCreateView skipped", it) }
 
@@ -373,6 +396,7 @@ object SettingsHeadsetHook : HookContext() {
                 instance?.let { headsetFragments[it] = true }
                 requestBluetoothStatus("service-connected")
                 injectFragmentStatus(instance)
+                purgeOverEarPreferences(instance)
             }
         }.onFailure { Log.d(TAG, "hook MiuiHeadsetFragment.onServiceConnected skipped", it) }
 
@@ -384,6 +408,7 @@ object SettingsHeadsetHook : HookContext() {
                 if (isSonyFragment(instance) && key?.startsWith("MMA_CONNECTION_FAILED") == true) {
                     Log.d(TAG, "Fragment.refreshStatus swallowed MMA failure for virtual Oppo device key=$key")
                     injectFragmentStatus(instance)
+                    purgeOverEarPreferences(instance)
                     result = null
                 }
             }
@@ -394,6 +419,7 @@ object SettingsHeadsetHook : HookContext() {
                 Log.d(TAG, "Fragment.handleConnectMmaFailed arg=${args[0]} ${fragmentDebug(instance)} isSony=${isSonyFragment(instance)}")
                 if (isSonyFragment(instance)) {
                     injectFragmentStatus(instance)
+                    purgeOverEarPreferences(instance)
                     result = null
                     Log.d(TAG, "Fragment.handleConnectMmaFailed swallowed for virtual Oppo device")
                 }
@@ -449,6 +475,69 @@ object SettingsHeadsetHook : HookContext() {
         }.onFailure { Log.d(TAG, "hook MiuiHeadsetFragment.$methodName skipped", it) }
     }
 
+    private fun hookMoreSettingsRedirect() {
+        val handleStartActivity: HookParam.() -> Unit = {
+            val intent = args.firstOrNull { it is Intent } as? Intent
+            if (intent != null && isVoiceAssistMoreSettingsIntent(intent)) {
+                val ctx = (instance as? Context) ?: context
+                val targetIntent = ctx?.packageManager?.getLaunchIntentForPackage("com.sony.songpal.mdr")
+                if (targetIntent != null) {
+                    targetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    ctx.startActivity(targetIntent)
+                    result = null
+                    Log.d(TAG, "More settings clicked -> redirected to com.sony.songpal.mdr")
+                } else {
+                    Log.w(TAG, "com.sony.songpal.mdr is not installed")
+                }
+            }
+        }
+
+        runCatching {
+            hookBefore(
+                findMethod(
+                    "android.app.Activity",
+                    "startActivityForResult",
+                    Intent::class.java,
+                    Int::class.javaPrimitiveType!!,
+                    Bundle::class.java,
+                ),
+                block = handleStartActivity,
+            )
+        }.onFailure { Log.d(TAG, "hook Activity.startActivityForResult(Intent, Int, Bundle) skipped", it) }
+
+        runCatching {
+            hookBefore(
+                findMethod(
+                    "android.app.Activity",
+                    "startActivityForResult",
+                    Intent::class.java,
+                    Int::class.javaPrimitiveType!!,
+                ),
+                block = handleStartActivity,
+            )
+        }.onFailure { Log.d(TAG, "hook Activity.startActivityForResult(Intent, Int) skipped", it) }
+
+        runCatching {
+            hookBefore(
+                findMethod("android.content.ContextWrapper", "startActivity", Intent::class.java),
+                block = handleStartActivity,
+            )
+        }.onFailure { Log.d(TAG, "hook ContextWrapper.startActivity(Intent) skipped", it) }
+
+        runCatching {
+            hookBefore(
+                findMethod("android.content.ContextWrapper", "startActivity", Intent::class.java, Bundle::class.java),
+                block = handleStartActivity,
+            )
+        }.onFailure { Log.d(TAG, "hook ContextWrapper.startActivity(Intent, Bundle) skipped", it) }
+    }
+
+    private fun isVoiceAssistMoreSettingsIntent(intent: Intent): Boolean {
+        return intent.action == "com.miui.voiceassist.FAST_CONNECT_MORE_SETTING" ||
+            intent.component?.packageName == "com.miui.voiceassist" ||
+            intent.`package` == "com.miui.voiceassist"
+    }
+
     private fun registerStatusReceiver(ctx: Context?) {
         if (ctx == null || receiverRegistered) return
         context = ctx.applicationContext ?: ctx
@@ -469,6 +558,7 @@ object SettingsHeadsetHook : HookContext() {
                             ?.let { SonyStateSnapshot.fromBundle(it) }
                         if (snapshot != null) {
                             isConnectedState = snapshot.connected
+                            isProtocolReady = snapshot.protocolReady
                             if (snapshot.deviceAddress != null) {
                                 hasLiveSnapshot = true
                                 currentAddress = snapshot.deviceAddress
@@ -713,7 +803,56 @@ object SettingsHeadsetHook : HookContext() {
         return null
     }
 
-    private fun isOverEar(): Boolean = currentFormFactor == "HEADSET"
+    private fun isOverEar(): Boolean = currentFormFactor == "HEADSET" ||
+        currentName?.contains("WH-", ignoreCase = true) == true
+
+    private fun purgeOverEarPreferences(fragment: Any?) {
+        if (!isOverEar()) return
+        runCatching {
+            runCatching { setObjectField(fragment, "mSupportInear", false) }
+            runCatching { setObjectField(fragment, "mSupportFit", false) }
+            runCatching { setObjectField(fragment, "mSupportKeyConfig", false) }
+
+            val screen = runCatching {
+                callMethod(fragment, "getPreferenceScreen")
+            }.getOrNull() ?: return
+
+            val keysToRemove = setOf(
+                "Ineartest", "fitness_check", "ear_fit_test", "inear_detection",
+                "key_config", "key_config_tws01", "gesture_operation", "gesture_settings",
+                "headset_key_settings", "key_settings"
+            )
+            val titlesToRemove = setOf("耳塞贴合度", "贴合度检测", "耳塞贴合度检测", "手势操作", "手势设置")
+
+            removePreferenceRecursively(screen, keysToRemove, titlesToRemove)
+        }.onFailure { Log.w(TAG, "purgeOverEarPreferences failed", it) }
+    }
+
+    private fun removePreferenceRecursively(
+        group: Any?,
+        keysToRemove: Set<String>,
+        titlesToRemove: Set<String>
+    ) {
+        if (group == null) return
+        val count = runCatching { callMethod(group, "getPreferenceCount") as Int }.getOrNull() ?: return
+        for (i in count - 1 downTo 0) {
+            val pref = runCatching { callMethod(group, "getPreference", i) }.getOrNull() ?: continue
+            val key = runCatching { callMethod(pref, "getKey") as? String }.getOrNull()
+            val title = runCatching { callMethod(pref, "getTitle")?.toString() }.getOrNull()
+
+            val shouldRemove = (key != null && keysToRemove.any { key.contains(it, ignoreCase = true) }) ||
+                (title != null && titlesToRemove.any { title.contains(it, ignoreCase = true) })
+
+            if (shouldRemove) {
+                runCatching {
+                    callMethod(group, "removePreference", pref)
+                    Log.d(TAG, "purgeOverEarPreferences removed pref key=$key title=$title")
+                }
+            } else {
+                removePreferenceRecursively(pref, keysToRemove, titlesToRemove)
+            }
+        }
+    }
 
     /** Applies (or reverts) the single-battery rendering to every battery view we know. */
     private fun applyBatteryLayouts() {
@@ -872,6 +1011,7 @@ object SettingsHeadsetHook : HookContext() {
             Log.d(TAG, "fragment status injected connected=true anc=$currentAnc battery=${settingsBatteryString()}")
         }.onFailure { Log.w(TAG, "inject fragment status failed", it) }
         updateSoundQualityBadges(fragment)
+        purgeOverEarPreferences(fragment)
     }
 
     /** Official 18dp badge height (Sound Connect big_header_view). */
@@ -1236,8 +1376,16 @@ object SettingsHeadsetHook : HookContext() {
             3 -> NoiseControlMode.AMBIENT_SOUND
             else -> NoiseControlMode.OFF
         }
+        if (!isConnectedState || !isProtocolReady) {
+            SonyBridge.preemptConnection(ctx)
+            runCatching {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    android.widget.Toast.makeText(ctx, "正在连接索尼耳机控制通道，请稍候...", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
         SonyBridge.setNoiseControl(ctx, sonyMode)
-        Log.d(TAG, "sendSonyAnc command sent mode=$mode sony=$sonyMode")
+        Log.d(TAG, "sendSonyAnc command sent mode=$mode sony=$sonyMode ready=$isProtocolReady")
     }
 
     private fun sendSonyAmbientVoice(enabled: Boolean) {
@@ -1247,6 +1395,14 @@ object SettingsHeadsetHook : HookContext() {
         }
         currentTransparencyVocalEnhancement = enabled
         hasAncState = true
+        if (!isConnectedState || !isProtocolReady) {
+            SonyBridge.preemptConnection(ctx)
+            runCatching {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    android.widget.Toast.makeText(ctx, "正在连接索尼耳机控制通道，请稍候...", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
         SonyBridge.setAmbientVoice(ctx, enabled)
         ctx.sendBroadcast(Intent(SonyPodsAction.ACTION_PODS_AMBIENT_VOICE_CHANGED).apply {
             putExtra("enabled", enabled)
@@ -1257,7 +1413,7 @@ object SettingsHeadsetHook : HookContext() {
             setPackage(BuildConfig.APPLICATION_ID)
             addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
         })
-        Log.d(TAG, "sendSonyAmbientVoice command sent enabled=$enabled")
+        Log.d(TAG, "sendSonyAmbientVoice command sent enabled=$enabled ready=$isProtocolReady")
     }
 
     private fun sendAncChanged(mode: Int) {

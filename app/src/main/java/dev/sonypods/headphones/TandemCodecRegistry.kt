@@ -162,6 +162,10 @@ interface TandemCodec {
         voiceFocus: Boolean = false,
         type: SystemInquiredType,
     ): ByteArray? = null
+    fun buildGetCinemaMode(): ByteArray? = null
+    fun buildSetCinemaMode(enabled: Boolean): ByteArray? = null
+    fun buildGetBgmMode(): ByteArray? = null
+    fun buildSetBgmMode(enabled: Boolean, placeCode: Int): ByteArray? = null
 }
 
 object TandemCodecRegistry {
@@ -691,6 +695,18 @@ object SonyTandemV2Table1Codec : TandemCodec {
         type: SystemInquiredType,
     ): ByteArray =
         SonyTandemV2Table1Protocol.buildSetSpeakToChatExtParam(sensitivity, modeOutTime, voiceFocus, type)
+
+    override fun buildGetCinemaMode(): ByteArray =
+        SonyTandemV2Table1Protocol.buildGetCinemaMode()
+
+    override fun buildSetCinemaMode(enabled: Boolean): ByteArray =
+        SonyTandemV2Table1Protocol.buildSetCinemaMode(enabled)
+
+    override fun buildGetBgmMode(): ByteArray =
+        SonyTandemV2Table1Protocol.buildGetBgmMode()
+
+    override fun buildSetBgmMode(enabled: Boolean, placeCode: Int): ByteArray =
+        SonyTandemV2Table1Protocol.buildSetBgmMode(enabled, placeCode)
 }
 
 object SonyTandemV2Table2Codec : TandemCodec {

@@ -81,6 +81,7 @@ object SonyBridge {
     const val CMD_SET_MULTIPOINT_ENABLED = "set_multipoint_enabled"
     const val CMD_SET_LE_AUDIO_ENABLED = "set_le_audio_enabled"
     const val CMD_SET_UPSCALING_ENABLED = "set_upscaling_enabled"
+    const val CMD_SET_LISTENING_MODE = "set_listening_mode"
     const val CMD_REPLY_MULTIPOINT_ALERT = "reply_multipoint_alert"
     const val CMD_REPLY_LE_AUDIO_ALERT = "reply_le_audio_alert"
     /** Bond the headset's LE-only identity so the phone can actually route LC3. */
@@ -110,6 +111,8 @@ object SonyBridge {
     const val CMD_CLOUD_MODEL_INFO_READY = "cloud_model_info_ready"
     /** Ask the engine to re-broadcast its current state (for late-starting consumers). */
     const val CMD_REPUBLISH = "republish"
+    /** Forcibly preempt any official app lease and seize the Bluetooth Tandem connection. */
+    const val CMD_PREEMPT_CONNECTION = "preempt_connection"
 
     /**
      * Sent by the process that renders the HyperOS notification and island once its
@@ -241,6 +244,9 @@ object SonyBridge {
     fun setUpscalingEnabled(context: Context, enabled: Boolean) =
         sendCommand(context, CMD_SET_UPSCALING_ENABLED) { putExtra(EXTRA_BOOL, enabled) }
 
+    fun setListeningMode(context: Context, mode: dev.sonypods.protocol.ListeningMode) =
+        sendCommand(context, CMD_SET_LISTENING_MODE) { putExtra(EXTRA_STRING, mode.name) }
+
     fun setSafeListeningPollActive(context: Context, active: Boolean) =
         sendCommand(context, if (active) CMD_SL_POLL_START else CMD_SL_POLL_STOP)
 
@@ -309,6 +315,20 @@ object SonyBridge {
             putExtra(EXTRA_STRING, address)
             putExtra("device_name", name)
         }
+
+    const val ACTION_PREEMPT_CONNECTION = "dev.sonypods.ACTION_PREEMPT_CONNECTION"
+
+    fun preemptConnection(context: Context) {
+        sendCommand(context, CMD_PREEMPT_CONNECTION)
+        runCatching {
+            context.sendBroadcast(
+                Intent(ACTION_PREEMPT_CONNECTION).apply {
+                    setPackage(OFFICIAL_APP_PACKAGE)
+                    addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                }
+            )
+        }
+    }
 
     fun acquireOfficialAppLease(context: Context, leaseId: String, token: IBinder): Boolean =
         sendOfficialAppLease(context, CMD_OFFICIAL_APP_ACQUIRE, leaseId, token)

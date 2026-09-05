@@ -251,6 +251,8 @@ data class SonyStateSnapshot(
     val supportsSafeListening: Boolean = false,
     val safeListeningLevelDb: Int? = null,
     val safeListeningStatus: String? = null,
+    val supportsListeningMode: Boolean = false,
+    val listeningMode: dev.sonypods.protocol.ListeningMode = dev.sonypods.protocol.ListeningMode.STANDARD,
 ) {
     /** Aggregated level fed to the system bluetooth stack and the Xiaomi surfaces. */
     val systemBatteryLevel: Int?
@@ -425,6 +427,8 @@ data class SonyStateSnapshot(
         putBoolean(KEY_SUPPORTS_SAFE_LISTENING, supportsSafeListening)
         safeListeningLevelDb?.let { putInt(KEY_SL_LEVEL, it) }
         safeListeningStatus?.let { putString(KEY_SL_STATUS, it) }
+        putBoolean(KEY_SUPPORTS_LISTENING_MODE, supportsListeningMode)
+        putString(KEY_LISTENING_MODE, listeningMode.name)
     }
 
     companion object {
@@ -560,6 +564,8 @@ data class SonyStateSnapshot(
         private const val KEY_SUPPORTS_SAFE_LISTENING = "supports_safe_listening"
         private const val KEY_SL_LEVEL = "sl_level"
         private const val KEY_SL_STATUS = "sl_status"
+        private const val KEY_SUPPORTS_LISTENING_MODE = "supports_listening_mode"
+        private const val KEY_LISTENING_MODE = "listening_mode"
 
         /**
          * Decode a snapshot and adopt the identity pairs it carries.
@@ -712,6 +718,10 @@ data class SonyStateSnapshot(
             supportsSafeListening = bundle.getBoolean(KEY_SUPPORTS_SAFE_LISTENING, false),
             safeListeningLevelDb = bundle.optInt(KEY_SL_LEVEL),
             safeListeningStatus = bundle.getString(KEY_SL_STATUS),
+            supportsListeningMode = bundle.getBoolean(KEY_SUPPORTS_LISTENING_MODE, false),
+            listeningMode = bundle.getString(KEY_LISTENING_MODE)?.let { name ->
+                dev.sonypods.protocol.ListeningMode.entries.firstOrNull { it.name == name }
+            } ?: dev.sonypods.protocol.ListeningMode.STANDARD,
         )
 
         fun fromUiState(state: SonyHeadphoneUiState): SonyStateSnapshot {
@@ -845,6 +855,9 @@ data class SonyStateSnapshot(
                     ?.supports(dev.sonypods.headphones.HeadphoneFeature.SAFE_LISTENING) == true,
                 safeListeningLevelDb = state.safeListeningState.levelDb,
                 safeListeningStatus = state.safeListeningState.status.name,
+                supportsListeningMode = state.connectedProfile
+                    ?.supports(dev.sonypods.headphones.HeadphoneFeature.LISTENING_MODE) == true,
+                listeningMode = state.listeningMode,
             )
         }
 

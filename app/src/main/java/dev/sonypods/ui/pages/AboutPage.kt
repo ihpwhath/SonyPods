@@ -240,15 +240,37 @@ fun AboutPage(
                             Spacer(Modifier.height(12.dp))
                             Card(modifier = Modifier.fillMaxWidth()) {
                                 ArrowPreference(
-                                    title = stringResource(R.string.about_source_code),
+                                    title = stringResource(R.string.about_original_author),
                                     endActions = {
                                         Text(
-                                            text = "GitHub",
+                                            text = "Mercury000",
                                             fontSize = MiuixTheme.textStyles.body2.fontSize,
                                             color = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                         )
                                     },
-                                    onClick = { context.openLink(SOURCE_URL) },
+                                    onClick = { context.openLink(ORIGINAL_AUTHOR_URL) },
+                                )
+                                ArrowPreference(
+                                    title = stringResource(R.string.about_upstream_project),
+                                    endActions = {
+                                        Text(
+                                            text = "Mercury000/SonyPods",
+                                            fontSize = MiuixTheme.textStyles.body2.fontSize,
+                                            color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                        )
+                                    },
+                                    onClick = { context.openLink(UPSTREAM_URL) },
+                                )
+                                ArrowPreference(
+                                    title = stringResource(R.string.about_license),
+                                    endActions = {
+                                        Text(
+                                            text = "GNU GPL v3.0",
+                                            fontSize = MiuixTheme.textStyles.body2.fontSize,
+                                            color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                        )
+                                    },
+                                    onClick = { context.openLink(LICENSE_URL) },
                                 )
                                 ArrowPreference(
                                     title = stringResource(R.string.about_references),
@@ -379,6 +401,8 @@ private fun Context.openLink(url: String) {
 }
 
 private const val LOGO_SPACER_KEY = "logoSpacer"
-private const val DEVELOPER_URL = "https://github.com/Mercury000"
-private const val SOURCE_URL = "https://github.com/Mercury000/SonyPods"
+private const val DEVELOPER_URL = "https://github.com/ihpwhath"
+private const val ORIGINAL_AUTHOR_URL = "https://github.com/Mercury000"
+private const val UPSTREAM_URL = "https://github.com/Mercury000/SonyPods"
+private const val LICENSE_URL = "https://www.gnu.org/licenses/gpl-3.0.html"
 private val HERO_EXTRA_TOP = 40.dp

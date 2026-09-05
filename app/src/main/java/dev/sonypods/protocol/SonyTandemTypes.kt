@@ -238,6 +238,17 @@ sealed interface ParsedTandemResponse {
         override val raw: ByteArray,
     ) : ParsedTandemResponse
 
+    data class CinemaMode(
+        val enabled: Boolean,
+        override val raw: ByteArray,
+    ) : ParsedTandemResponse
+
+    data class BgmMode(
+        val enabled: Boolean,
+        val placeCode: Int,
+        override val raw: ByteArray,
+    ) : ParsedTandemResponse
+
     /** Structured PLAY_RET_CAPABILITY (v1 and v2). */
     data class PlaybackCapability(
         val inquiredTypeCode: Int,

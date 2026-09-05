@@ -14,6 +14,7 @@ import dev.sonypods.bridge.SonyStateSnapshot
 import dev.sonypods.config.ConfigManager
 import dev.sonypods.config.PodImagePrefs
 import dev.sonypods.headphones.HeadphoneFormFactor
+import dev.sonypods.protocol.ListeningMode
 import dev.sonypods.protocol.NoiseControlMode
 import dev.sonypods.hook.HookContext
 import dev.sonypods.hook.Log
@@ -56,7 +57,10 @@ object MiLinkServiceHook : HookContext() {
      * anything else is an over-ear/neck headset. */
     private var currentFormFactor: String? = null
     internal val isOverEar: Boolean
-        get() = currentFormFactor == HeadphoneFormFactor.HEADSET.name
+        get() = currentFormFactor == HeadphoneFormFactor.HEADSET.name ||
+            currentName?.contains("WH-", ignoreCase = true) == true
+    internal var supportsListeningMode = false
+    internal var currentListeningMode: ListeningMode = ListeningMode.STANDARD
     internal var currentSpatialAudioMode = ConfigManager.SPATIAL_AUDIO_OFF
     internal var lastAncBatteryController: Any? = null
     internal var cachedAncBatteryModel: Any? = null
@@ -240,6 +244,16 @@ object MiLinkServiceHook : HookContext() {
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetInfo constructor skipped", it) }
+        runCatching {
+            hookAfter(findMethodByParamCount("com.miui.circulateplus.world.headset.HeadSetsDetail", "onAttachedToWindow", 0)) {
+                val view = instance as? android.view.ViewGroup ?: return@hookAfter
+                val lp = view.layoutParams
+                if (lp != null && lp.height > 0 && !spatialAudioPanelEnabled()) {
+                    lp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                    view.layoutParams = lp
+                }
+            }
+        }.onFailure { Log.d(TAG, "hook HeadSetsDetail.onAttachedToWindow skipped", it) }
     }
 
     /**
@@ -392,6 +406,8 @@ object MiLinkServiceHook : HookContext() {
                 runCatching {
                     setObjectField(cached, "ancState", miLinkAncState())
                     setObjectField(cached, "batteryLevelList", java.util.ArrayList(miLinkBatteryLevels()))
+                    setObjectField(cached, "spatialState", miLinkSpatialMode())
+                    setObjectField(cached, "deviceSpatialType", miLinkDeviceSpatialType())
                 }
                 return cached
             }
@@ -448,7 +464,14 @@ object MiLinkServiceHook : HookContext() {
         )
         ctor.isAccessible = true
         val battery = java.util.ArrayList(miLinkBatteryLevels())
-        return ctor.newInstance(device, miLinkAncState(), battery, -1, 0, 0)
+        return ctor.newInstance(
+            device,
+            miLinkAncState(),
+            battery,
+            miLinkSpatialMode(),
+            miLinkDeviceSpatialType(),
+            0
+        )
     }
 
     internal fun hookBluetoothDeviceResult(className: String, methodName: String, result: () -> Any) {
@@ -602,6 +625,17 @@ object MiLinkServiceHook : HookContext() {
         // not overwrite (or be persisted over) a real form factor.
         snapshot.formFactor?.takeIf { it != HeadphoneFormFactor.UNKNOWN.name }
             ?.let { currentFormFactor = it }
+        supportsListeningMode = snapshot.supportsListeningMode
+        currentListeningMode = snapshot.listeningMode
+        if (supportsListeningMode) {
+            currentSpatialAudioMode = when (currentListeningMode) {
+                ListeningMode.STANDARD -> ConfigManager.SPATIAL_AUDIO_OFF
+                ListeningMode.CINEMA -> ConfigManager.SPATIAL_AUDIO_FIXED
+                ListeningMode.BGM_MY_ROOM,
+                ListeningMode.BGM_LIVING_ROOM,
+                ListeningMode.BGM_CAFE -> ConfigManager.SPATIAL_AUDIO_HEAD_TRACKING
+            }
+        }
         currentBattery = BatteryParams(
             left = (snapshot.batteryLeft ?: snapshot.batterySingle)
                 ?.let { PodParams(battery = it, isConnected = true) },
@@ -617,10 +651,12 @@ object MiLinkServiceHook : HookContext() {
             runCatching {
                 setObjectField(model, "ancState", miLinkAncState())
                 setObjectField(model, "batteryLevelList", java.util.ArrayList(miLinkBatteryLevels()))
+                setObjectField(model, "spatialState", miLinkSpatialMode())
+                setObjectField(model, "deviceSpatialType", miLinkDeviceSpatialType())
             }
         }
         saveState(context)
-        Log.d(TAG, "state applied battery=${snapshot.batteryLeft}/${snapshot.batteryRight} anc=$currentAnc formFactor=$currentFormFactor overEar=$isOverEar")
+        Log.d(TAG, "state applied battery=${snapshot.batteryLeft}/${snapshot.batteryRight} anc=$currentAnc formFactor=$currentFormFactor overEar=$isOverEar listeningMode=$currentListeningMode")
         pushStateToPanel()
         ensureAncBatteryModel()
     }
@@ -642,6 +678,9 @@ object MiLinkServiceHook : HookContext() {
             .forEach { owner ->
                 notifyHeadsetPropertyChanged(owner, device, UPDATE_TYPE_BATTERY)
                 notifyHeadsetPropertyChanged(owner, device, UPDATE_TYPE_ANC)
+                if (spatialAudioPanelEnabled()) {
+                    notifySpatialUiChanged(owner, device, currentSpatialAudioMode)
+                }
             }
     }
 
@@ -823,6 +862,19 @@ object MiLinkServiceHook : HookContext() {
 
     internal fun updateSpatialAudioMode(mode: Int) {
         currentSpatialAudioMode = mode.coerceIn(ConfigManager.SPATIAL_AUDIO_OFF, ConfigManager.SPATIAL_AUDIO_HEAD_TRACKING)
+        val targetMode = when (currentSpatialAudioMode) {
+            ConfigManager.SPATIAL_AUDIO_FIXED -> ListeningMode.CINEMA
+            ConfigManager.SPATIAL_AUDIO_HEAD_TRACKING -> {
+                if (currentListeningMode.isBgm) currentListeningMode else ListeningMode.BGM_CAFE
+            }
+            else -> ListeningMode.STANDARD
+        }
+        currentListeningMode = targetMode
+        val ctx = context
+        if (ctx != null && (supportsListeningMode || isOverEar)) {
+            SonyBridge.setListeningMode(ctx, targetMode)
+            Log.d(TAG, "updateSpatialAudioMode sent listeningMode=$targetMode to SonyBridge")
+        }
         saveState(context)
     }
 
@@ -835,9 +887,7 @@ object MiLinkServiceHook : HookContext() {
     }
 
     internal fun spatialAudioPanelEnabled(): Boolean {
-        // The first batch of Sony targets (WH-1000XM4 / LinkBuds S / WF-1000XM5)
-        // has no writable spatial-audio mode, so the fusion-center panel stays hidden.
-        return false
+        return supportsListeningMode || isOverEar || (currentName?.contains("WH-", ignoreCase = true) == true)
     }
 
     internal fun isTargetAncBatteryModel(model: Any?): Boolean {
@@ -938,6 +988,8 @@ object MiLinkServiceHook : HookContext() {
             .putString("form_factor", currentFormFactor)
             .putInt("anc", currentAnc)
             .putInt("spatial_audio_mode", currentSpatialAudioMode)
+            .putBoolean("supports_listening_mode", supportsListeningMode)
+            .putString("listening_mode", currentListeningMode.name)
             .putInt("left_battery", currentBattery.left?.battery ?: 0)
             .putBoolean("left_charging", currentBattery.left?.isCharging == true)
             .putBoolean("left_connected", currentBattery.left?.isConnected == true)
@@ -976,6 +1028,10 @@ object MiLinkServiceHook : HookContext() {
         currentAnc = prefs.getInt("anc", currentAnc)
         currentSpatialAudioMode = prefs.getInt("spatial_audio_mode", currentSpatialAudioMode)
             .coerceIn(ConfigManager.SPATIAL_AUDIO_OFF, ConfigManager.SPATIAL_AUDIO_HEAD_TRACKING)
+        supportsListeningMode = prefs.getBoolean("supports_listening_mode", supportsListeningMode)
+        prefs.getString("listening_mode", null)?.let { name ->
+            currentListeningMode = runCatching { ListeningMode.valueOf(name) }.getOrDefault(currentListeningMode)
+        }
         SonyDeviceService.rememberAddress(currentAddress)
         currentBattery = BatteryParams(
             left = PodParams(

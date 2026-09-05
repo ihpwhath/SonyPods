@@ -376,8 +376,11 @@
     <string name="mp_auto_reconnect_body">The audio device disconnects briefly and reconnects automatically.</string>
     <string name="about_openbuds">OpenBuds</string>
     <string name="about_oppopods">OppoPods</string>
-    <string name="about_developer">Developer</string>
+    <string name="about_developer">Maintainer</string>
+    <string name="about_original_author">Original Author</string>
     <string name="about_source_code">Source Code</string>
+    <string name="about_upstream_project">Upstream Project</string>
+    <string name="about_license">License</string>
     <string name="about_references">References</string>
     <string name="about_references_description">The implementation of SonyPods references the following open-source projects.</string>
     <string name="about_reference_projects">Reference projects</string>
@@ -523,4 +526,10 @@
     <string name="speak_to_chat_mode_out_time_mid">Standard (approx. 15 sec)</string>
     <string name="speak_to_chat_mode_out_time_slow">Long (approx. 30 sec)</string>
     <string name="speak_to_chat_mode_out_time_none">Do not close automatically</string>
+    <string name="listening_mode_title">Listening mode</string>
+    <string name="listening_mode_standard">Standard</string>
+    <string name="listening_mode_cinema">Cinema</string>
+    <string name="listening_mode_bgm_my_room">Background music (My Room)</string>
+    <string name="listening_mode_bgm_living_room">Background music (Living Room)</string>
+    <string name="listening_mode_bgm_cafe">Background music (Cafe)</string>
 </resources>

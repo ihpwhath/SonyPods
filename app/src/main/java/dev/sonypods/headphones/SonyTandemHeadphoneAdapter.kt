@@ -7,6 +7,7 @@ import dev.sonypods.protocol.DeviceInfoType
 import dev.sonypods.protocol.EqEbbInquiredType
 import dev.sonypods.protocol.EqPresetId
 import dev.sonypods.protocol.LeaInquiredType
+import dev.sonypods.protocol.ListeningMode
 import dev.sonypods.protocol.NcAsmInquiredType
 import dev.sonypods.protocol.NoiseAdaptiveSensitivity
 import dev.sonypods.protocol.NoiseControlMode
@@ -264,6 +265,15 @@ object SonyTandemHeadphoneAdapter : HeadphoneAdapter {
                     add(command(profile, HeadphoneFeature.WEARING_STATUS, "GET Wearing status", it))
                 }
             }
+            if (profile.supports(HeadphoneFeature.LISTENING_MODE)) {
+                val listeningCodec = codecFor(profile, HeadphoneFeature.LISTENING_MODE)
+                listeningCodec.buildGetCinemaMode()?.let {
+                    add(command(profile, HeadphoneFeature.LISTENING_MODE, "GET Cinema mode", it))
+                }
+                listeningCodec.buildGetBgmMode()?.let {
+                    add(command(profile, HeadphoneFeature.LISTENING_MODE, "GET BGM mode", it))
+                }
+            }
             // Live sound-quality badges: one COMMON_GET_STATUS each, then NTFY
             // pushes keep them current (SC `n10.a.mo313a` / `u60.a.mo313a` query
             // once on feature start and never re-poll).
@@ -363,6 +373,12 @@ object SonyTandemHeadphoneAdapter : HeadphoneAdapter {
                 codecFor(profile, HeadphoneFeature.WEARING_STATUS).buildGetWearingStatus() != null
             ) {
                 add(HeadphoneFeature.WEARING_STATUS)
+            }
+            if (profile.supports(HeadphoneFeature.LISTENING_MODE)) {
+                val codec = codecFor(profile, HeadphoneFeature.LISTENING_MODE)
+                if (codec.buildGetCinemaMode() != null || codec.buildGetBgmMode() != null) {
+                    add(HeadphoneFeature.LISTENING_MODE)
+                }
             }
         }
 
@@ -611,6 +627,55 @@ object SonyTandemHeadphoneAdapter : HeadphoneAdapter {
                 },
             )
         }
+
+    override fun buildSetListeningModeCommands(
+        profile: ConnectedHeadphoneProfile,
+        mode: ListeningMode,
+    ): List<HeadphoneCommand> = buildList {
+        val codec = codecFor(profile, HeadphoneFeature.LISTENING_MODE)
+        when (mode) {
+            ListeningMode.STANDARD -> {
+                codec.buildSetCinemaMode(false)?.let {
+                    add(command(profile, HeadphoneFeature.LISTENING_MODE, "SET Cinema mode OFF", it))
+                }
+                codec.buildSetBgmMode(false, 0)?.let {
+                    add(command(profile, HeadphoneFeature.LISTENING_MODE, "SET BGM mode OFF", it))
+                }
+            }
+            ListeningMode.CINEMA -> {
+                codec.buildSetBgmMode(false, 0)?.let {
+                    add(command(profile, HeadphoneFeature.LISTENING_MODE, "SET BGM mode OFF", it))
+                }
+                codec.buildSetCinemaMode(true)?.let {
+                    add(command(profile, HeadphoneFeature.LISTENING_MODE, "SET Cinema mode ON", it))
+                }
+            }
+            ListeningMode.BGM_MY_ROOM -> {
+                codec.buildSetCinemaMode(false)?.let {
+                    add(command(profile, HeadphoneFeature.LISTENING_MODE, "SET Cinema mode OFF", it))
+                }
+                codec.buildSetBgmMode(true, 0)?.let {
+                    add(command(profile, HeadphoneFeature.LISTENING_MODE, "SET BGM mode MY_ROOM", it))
+                }
+            }
+            ListeningMode.BGM_LIVING_ROOM -> {
+                codec.buildSetCinemaMode(false)?.let {
+                    add(command(profile, HeadphoneFeature.LISTENING_MODE, "SET Cinema mode OFF", it))
+                }
+                codec.buildSetBgmMode(true, 1)?.let {
+                    add(command(profile, HeadphoneFeature.LISTENING_MODE, "SET BGM mode LIVING_ROOM", it))
+                }
+            }
+            ListeningMode.BGM_CAFE -> {
+                codec.buildSetCinemaMode(false)?.let {
+                    add(command(profile, HeadphoneFeature.LISTENING_MODE, "SET Cinema mode OFF", it))
+                }
+                codec.buildSetBgmMode(true, 2)?.let {
+                    add(command(profile, HeadphoneFeature.LISTENING_MODE, "SET BGM mode CAFE", it))
+                }
+            }
+        }
+    }
 
     override fun buildSetQuickAccessFunction(
         profile: ConnectedHeadphoneProfile,

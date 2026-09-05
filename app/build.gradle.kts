@@ -22,8 +22,8 @@ val signingProperties = listOf(
 )
 
 /** About-page developer identity: only the profile data is fetched, this id is fixed. */
-val DEVELOPER_GITHUB_ID = "Mercury000"
-val DEVELOPER_NAME_FALLBACK = "Mercury"
+val DEVELOPER_GITHUB_ID = "ihpwhath"
+val DEVELOPER_NAME_FALLBACK = "ihpwhath"
 
 // WebP encoder (libwebp via JNI, natives bundled for Linux/Windows/macOS x64 + Linux aarch64)
 // for the About-page avatar. Loaded lazily in an isolated URLClassLoader so it works
@@ -52,8 +52,8 @@ android {
         applicationId = "com.mercury.sonypods"
         minSdk = 34
         targetSdk = 36
-        versionCode = 20
-        versionName = "1.6.2"
+        versionCode = 21
+        versionName = "1.6.3-xm6"
         buildConfigField("long", "BUILD_TIMESTAMP", System.currentTimeMillis().toString())
         ndk {
             // Modern phones are arm64-only; x86/armeabi-v7a legacy ABIs are dead weight.

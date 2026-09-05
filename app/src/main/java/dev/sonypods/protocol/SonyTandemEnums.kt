@@ -32,6 +32,21 @@ enum class DseeGeneration(val code: Int) {
     }
 }
 
+enum class ListeningMode(val code: Int) {
+    STANDARD(0),
+    CINEMA(1),
+    BGM_MY_ROOM(2),
+    BGM_LIVING_ROOM(3),
+    BGM_CAFE(4);
+
+    val isBgm: Boolean
+        get() = this == BGM_MY_ROOM || this == BGM_LIVING_ROOM || this == BGM_CAFE
+
+    companion object {
+        fun fromCode(code: Int): ListeningMode = entries.firstOrNull { it.code == code } ?: STANDARD
+    }
+}
+
 /** Whether DSEE is actively processing the stream right now (V1 == V2 codes). */
 enum class DseeEffectState(val code: Int) {
     OFF(0x00),

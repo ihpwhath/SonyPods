@@ -57,6 +57,7 @@ import dev.sonypods.config.CardLocation
 import dev.sonypods.config.VisibilityConfig
 import dev.sonypods.protocol.ConnectionQualityMode
 import dev.sonypods.protocol.DseeGeneration
+import dev.sonypods.protocol.ListeningMode
 import dev.sonypods.protocol.SmartTalkingDetectionSensitivity
 import dev.sonypods.protocol.SmartTalkingModeOutTime
 import dev.sonypods.protocol.SoundQualityCodec
@@ -265,6 +266,12 @@ internal fun LazyListScope.podControlItems(
     if (visibility.eq.renderedHere() && uiState.supportsEq) {
         item {
             EqCard(uiState = uiState, actions = actions)
+        }
+    }
+
+    if (!forMorePage && uiState.supportsListeningMode) {
+        item {
+            ListeningModeCard(uiState = uiState, actions = actions)
         }
     }
 
@@ -483,6 +490,34 @@ private fun UpscalingCard(
             summary = upscalingDescription(uiState.upscalingTypeCode),
             checked = uiState.upscalingEnabled == true,
             onCheckedChange = actions.onUpscalingEnabledChange,
+        )
+    }
+}
+
+@Composable
+private fun ListeningModeCard(
+    uiState: SonyStateSnapshot,
+    actions: SonyDetailActions,
+) {
+    val current = uiState.listeningMode
+    val options = listOf(
+        ListeningMode.STANDARD to stringResource(R.string.listening_mode_standard),
+        ListeningMode.CINEMA to stringResource(R.string.listening_mode_cinema),
+        ListeningMode.BGM_MY_ROOM to stringResource(R.string.listening_mode_bgm_my_room),
+        ListeningMode.BGM_LIVING_ROOM to stringResource(R.string.listening_mode_bgm_living_room),
+        ListeningMode.BGM_CAFE to stringResource(R.string.listening_mode_bgm_cafe),
+    )
+    Card(modifier = Modifier.padding(horizontal = 12.dp)) {
+        OverlayDropdownPreference(
+            title = stringResource(R.string.listening_mode_title),
+            items = options.map { it.second },
+            selectedIndex = options.indexOfFirst { it.first == current }.coerceAtLeast(0),
+            onSelectedIndexChange = { index ->
+                val target = options.getOrNull(index)?.first ?: return@OverlayDropdownPreference
+                if (target != current) {
+                    actions.onListeningModeChange(target)
+                }
+            },
         )
     }
 }

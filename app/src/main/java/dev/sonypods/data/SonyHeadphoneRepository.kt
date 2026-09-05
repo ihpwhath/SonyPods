@@ -652,6 +652,10 @@ data class SonyHeadphoneUiState(
     /** SET 已发出、尚未收到 RET/NTFY：官方此窗口内用引导页/进度框接管界面，
      * 播放控制不可用；我们以等价方式置灰播放控制。 */
     val connectionQualitySwitching: Boolean = false,
+    val listeningMode: dev.sonypods.protocol.ListeningMode = dev.sonypods.protocol.ListeningMode.STANDARD,
+    val cinemaModeEnabled: Boolean = false,
+    val bgmModeEnabled: Boolean = false,
+    val bgmPlaceCode: Int = 0,
     val endpointDiagnostic: EndpointDiagnosticState? = null,
     val table2Diagnostic: Table2DiagnosticState? = null,
     val supportedFeatures: List<FeatureStatus> = featureStatusesFor(null),
@@ -1847,8 +1851,16 @@ class SonyHeadphoneRepository private constructor(
         val current = _state.value.noiseControlState
         val level = current.ambientLevel?.takeIf { it > 0 }?.coerceIn(1, 20) ?: 10
         val ambientMode = if (current.ambientVoiceMode) AmbientSoundMode.VOICE else AmbientSoundMode.NORMAL
+        val useNoiseAdaptive = if (canWrite(HeadphoneFeature.NOISE_ADAPTIVE)) {
+            if (mode == NoiseControlMode.AMBIENT_SOUND) true else current.noiseAdaptiveEnabled
+        } else {
+            false
+        }
         _state.update {
-            it.copy(noiseControlState = it.noiseControlState.forMode(mode).copy(ambientLevel = level))
+            it.copy(noiseControlState = it.noiseControlState.forMode(mode).copy(
+                ambientLevel = level,
+                noiseAdaptiveEnabled = useNoiseAdaptive,
+            ))
         }
         val profile = ensureConnectedProfile()
         HeadphoneAdapterRegistry.buildSetNoiseControlModeCommands(
@@ -1856,7 +1868,7 @@ class SonyHeadphoneRepository private constructor(
             mode,
             level,
             ambientMode,
-            current.noiseAdaptiveEnabled,
+            useNoiseAdaptive,
             current.noiseAdaptiveSensitivity,
             current.windNoiseReduction,
         ).forEach(::sendCommand)
@@ -1944,10 +1956,12 @@ class SonyHeadphoneRepository private constructor(
         val current = _state.value.noiseControlState
         val level = current.ambientLevel?.takeIf { it > 0 }?.coerceIn(1, 20) ?: 10
         val ambientMode = if (enabled) AmbientSoundMode.VOICE else AmbientSoundMode.NORMAL
+        val useNoiseAdaptive = if (canWrite(HeadphoneFeature.NOISE_ADAPTIVE)) true else current.noiseAdaptiveEnabled
         _state.update {
             it.copy(noiseControlState = it.noiseControlState.forMode(NoiseControlMode.AMBIENT_SOUND).copy(
                 ambientLevel = level,
                 ambientVoiceMode = enabled,
+                noiseAdaptiveEnabled = useNoiseAdaptive,
             ))
         }
         val profile = ensureConnectedProfile()
@@ -1956,7 +1970,7 @@ class SonyHeadphoneRepository private constructor(
             NoiseControlMode.AMBIENT_SOUND,
             level,
             ambientMode,
-            current.noiseAdaptiveEnabled,
+            useNoiseAdaptive,
             current.noiseAdaptiveSensitivity,
             current.windNoiseReduction,
         ).forEach(::sendCommand)
@@ -3409,6 +3423,8 @@ class SonyHeadphoneRepository private constructor(
             is ParsedTandemResponse.ProtocolInfo -> applyProtocolInfo(parsed)
             is ParsedTandemResponse.ConnectCapabilityInfo -> applyConnectCapabilityInfo(parsed)
             is ParsedTandemResponse.NcAsmCapabilityInfo -> applyNcAsmCapabilityInfo(parsed)
+            is ParsedTandemResponse.CinemaMode -> applyCinemaMode(parsed)
+            is ParsedTandemResponse.BgmMode -> applyBgmMode(parsed)
             is ParsedTandemResponse.CapabilityInfo -> applyCapabilityInfo(parsed)
         }
     }
@@ -4036,6 +4052,77 @@ class SonyHeadphoneRepository private constructor(
                 channel = profile.channelFor(HeadphoneFeature.CONNECTION_QUALITY),
             )
         )
+    }
+
+    private fun applyCinemaMode(response: ParsedTandemResponse.CinemaMode) {
+        appendLog("Cinema mode ${if (response.isUnsolicited) "NTFY" else "RET"} enabled=${response.enabled}")
+        _state.update { current ->
+            val newCinema = response.enabled
+            val currentBgm = current.bgmModeEnabled
+            val computedMode = when {
+                currentBgm -> when (current.bgmPlaceCode) {
+                    0 -> dev.sonypods.protocol.ListeningMode.BGM_MY_ROOM
+                    1 -> dev.sonypods.protocol.ListeningMode.BGM_LIVING_ROOM
+                    2 -> dev.sonypods.protocol.ListeningMode.BGM_CAFE
+                    else -> dev.sonypods.protocol.ListeningMode.BGM_MY_ROOM
+                }
+                newCinema -> dev.sonypods.protocol.ListeningMode.CINEMA
+                else -> dev.sonypods.protocol.ListeningMode.STANDARD
+            }
+            current.copy(
+                cinemaModeEnabled = newCinema,
+                listeningMode = computedMode,
+            )
+        }
+    }
+
+    private fun applyBgmMode(response: ParsedTandemResponse.BgmMode) {
+        appendLog("BGM mode ${if (response.isUnsolicited) "NTFY" else "RET"} enabled=${response.enabled} placeCode=${response.placeCode}")
+        _state.update { current ->
+            val newBgm = response.enabled
+            val currentCinema = current.cinemaModeEnabled
+            val computedMode = when {
+                newBgm -> when (response.placeCode) {
+                    0 -> dev.sonypods.protocol.ListeningMode.BGM_MY_ROOM
+                    1 -> dev.sonypods.protocol.ListeningMode.BGM_LIVING_ROOM
+                    2 -> dev.sonypods.protocol.ListeningMode.BGM_CAFE
+                    else -> dev.sonypods.protocol.ListeningMode.BGM_MY_ROOM
+                }
+                currentCinema -> dev.sonypods.protocol.ListeningMode.CINEMA
+                else -> dev.sonypods.protocol.ListeningMode.STANDARD
+            }
+            current.copy(
+                bgmModeEnabled = newBgm,
+                bgmPlaceCode = response.placeCode,
+                listeningMode = computedMode,
+            )
+        }
+    }
+
+    fun setListeningMode(mode: dev.sonypods.protocol.ListeningMode) {
+        val profile = _state.value.connectedProfile ?: return
+        if (!profile.supports(HeadphoneFeature.LISTENING_MODE)) {
+            appendLog("Listening mode write is disabled for current profile")
+            return
+        }
+        _state.update { current ->
+            current.copy(
+                listeningMode = mode,
+                cinemaModeEnabled = mode == dev.sonypods.protocol.ListeningMode.CINEMA,
+                bgmModeEnabled = mode in setOf(
+                    dev.sonypods.protocol.ListeningMode.BGM_MY_ROOM,
+                    dev.sonypods.protocol.ListeningMode.BGM_LIVING_ROOM,
+                    dev.sonypods.protocol.ListeningMode.BGM_CAFE,
+                ),
+                bgmPlaceCode = when (mode) {
+                    dev.sonypods.protocol.ListeningMode.BGM_MY_ROOM -> 0
+                    dev.sonypods.protocol.ListeningMode.BGM_LIVING_ROOM -> 1
+                    dev.sonypods.protocol.ListeningMode.BGM_CAFE -> 2
+                    else -> current.bgmPlaceCode
+                },
+            )
+        }
+        SonyTandemHeadphoneAdapter.buildSetListeningModeCommands(profile, mode).forEach(::sendCommandIfReady)
     }
 
     private fun applyLeaStatus(response: ParsedTandemResponse.LeaStatus) {

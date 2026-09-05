@@ -194,6 +194,8 @@ object SonyTandemV2Table1Protocol {
     private const val AUDIO_NTFY_PARAM: Byte = 0xE9.toByte()
     /** AudioInquiredType.UPSCALING — the first-generation DSEE HX / DSEE toggle. */
     private const val AUDIO_INQ_UPSCALING: Byte = 0x01
+    private const val AUDIO_INQ_UPMIX_CINEMA: Byte = 0x04
+    private const val AUDIO_INQ_BGM_MODE: Byte = 0x09
     /** AudioInquiredType.UPSCALING_AUTO_OFF_WITH_STATUS_DISABLE_REASON — the newer
      * generation that also covers DSEE Ultimate. `BSON.REGEX` (0x0B) in SC's enum. */
     private const val AUDIO_INQ_UPSCALING_WITH_REASON: Byte = 0x0B
@@ -311,6 +313,18 @@ object SonyTandemV2Table1Protocol {
             AUDIO_SET_PARAM,
             byteArrayOf(inquiredTypeCode, if (on) UPSCALING_AUTO else UPSCALING_OFF),
         )
+
+    fun buildGetCinemaMode(): ByteArray =
+        SonyTandemFrame.message(AUDIO_GET_PARAM, byteArrayOf(AUDIO_INQ_UPMIX_CINEMA))
+
+    fun buildSetCinemaMode(enabled: Boolean): ByteArray =
+        SonyTandemFrame.message(AUDIO_SET_PARAM, byteArrayOf(AUDIO_INQ_UPMIX_CINEMA, if (enabled) 0x01 else 0x00))
+
+    fun buildGetBgmMode(): ByteArray =
+        SonyTandemFrame.message(AUDIO_GET_PARAM, byteArrayOf(AUDIO_INQ_BGM_MODE))
+
+    fun buildSetBgmMode(enabled: Boolean, placeCode: Int): ByteArray =
+        SonyTandemFrame.message(AUDIO_SET_PARAM, byteArrayOf(AUDIO_INQ_BGM_MODE, if (enabled) 0x00 else 0x01, placeCode.toByte()))
 
     /**
      * Parse a V2 CONNECT_RET_SUPPORT_FUNCTION payload (0x07).
@@ -1451,6 +1465,17 @@ object SonyTandemV2Table1Protocol {
             AUDIO_INQ_UPSCALING.unsigned,
             AUDIO_INQ_UPSCALING_WITH_REASON.unsigned,
             -> parseUpscalingParam(payload, raw, isUnsolicited)
+
+            AUDIO_INQ_UPMIX_CINEMA.unsigned -> {
+                val enabled = payload.getOrNull(1) == 0x01.toByte()
+                ParsedTandemResponse.CinemaMode(enabled, raw)
+            }
+
+            AUDIO_INQ_BGM_MODE.unsigned -> {
+                val enabled = payload.getOrNull(1) == 0x00.toByte()
+                val placeCode = payload.getOrNull(2)?.unsigned ?: 0
+                ParsedTandemResponse.BgmMode(enabled, placeCode, raw)
+            }
 
             else -> ParsedTandemResponse.Unknown(DATA_MDR.unsigned, null, payload, raw)
         }

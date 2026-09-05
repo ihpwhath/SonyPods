@@ -450,6 +450,17 @@ object SonyCapabilityProbe {
             }
         }
 
+        if (functions.any {
+            it.v2Type() in setOf(
+                SonyV2FunctionType.UPMIX_CINEMA,
+                SonyV2FunctionType.UPMIX_SERIES,
+                SonyV2FunctionType.BGM_MODE_SMALL_MIDDLE_LARGE,
+                SonyV2FunctionType.BGM_MODE_SMALL_MIDDLE_LARGE_AND_ERRORCODE,
+            )
+        }) {
+            features.add(HeadphoneFeature.LISTENING_MODE)
+        }
+
         if (noiseQueries.isNotEmpty()) {
             features.add(HeadphoneFeature.NOISE_CONTROL)
             // V1's single NC/ASM type (0x02) carries both the ambient level and

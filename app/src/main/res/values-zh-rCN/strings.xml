@@ -377,9 +377,12 @@
     <string name="mp_auto_reconnect_body">音频设备暂时断开连接，将自动重新连接。</string>
     <string name="about_openbuds">OpenBuds</string>
     <string name="about_oppopods">OppoPods</string>
-    <string name="about_developer">开发者</string>
+    <string name="about_developer">分支维护</string>
+    <string name="about_original_author">原作者</string>
     <string name="about_source_code">源码</string>
-    <string name="about_references">引用</string>
+    <string name="about_upstream_project">上游项目</string>
+    <string name="about_license">开源协议</string>
+    <string name="about_references">引用致谢</string>
     <string name="about_references_description">SonyPods 的实现参考了以下开源项目。</string>
     <string name="about_reference_projects">引用项目</string>
     <string name="qa_card_title">Quick Access</string>
@@ -524,4 +527,10 @@
     <string name="speak_to_chat_mode_out_time_mid">标准（约15秒）</string>
     <string name="speak_to_chat_mode_out_time_slow">长（约30秒）</string>
     <string name="speak_to_chat_mode_out_time_none">不自动关闭</string>
+    <string name="listening_mode_title">聆听模式</string>
+    <string name="listening_mode_standard">标准</string>
+    <string name="listening_mode_cinema">电影</string>
+    <string name="listening_mode_bgm_my_room">背景音乐（我的房间）</string>
+    <string name="listening_mode_bgm_living_room">背景音乐（客厅）</string>
+    <string name="listening_mode_bgm_cafe">背景音乐（咖啡馆）</string>
 </resources>

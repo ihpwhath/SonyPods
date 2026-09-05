@@ -42,6 +42,7 @@ data class SonyDetailActions(
     val onLeAudioAlertReply: (Boolean) -> Unit = {},
     /** Toggles DSEE / DSEE Extreme (AUDIO-domain upscaling). */
     val onUpscalingEnabledChange: (Boolean) -> Unit = {},
+    val onListeningModeChange: (dev.sonypods.protocol.ListeningMode) -> Unit = {},
     /** Picks 声音质量优先 / 稳定连接优先（AUDIO_SET_PARAM + PriorMode）。 */
     val onConnectionQualityChange: (ConnectionQualityMode) -> Unit = {},
     /** Bonds the headset's LE-only identity, the phone-side half of the LE Audio switch. */

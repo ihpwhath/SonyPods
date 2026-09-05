@@ -91,14 +91,19 @@ object SoundConnectHandoverHook : HookContext() {
         application.registerActivityLifecycleCallbacks(coordinator)
         val engineReadyReceiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
-                    if (intent?.action == SonyBridge.ACTION_ENGINE_READY) {
-                        coordinator.onEngineReady("bluetooth-engine-ready")
+                    when (intent?.action) {
+                        SonyBridge.ACTION_ENGINE_READY -> coordinator.onEngineReady("bluetooth-engine-ready")
+                        SonyBridge.ACTION_PREEMPT_CONNECTION -> coordinator.onPreemptRequested("preempt-requested")
                     }
                 }
             }
+        val filter = IntentFilter().apply {
+            addAction(SonyBridge.ACTION_ENGINE_READY)
+            addAction(SonyBridge.ACTION_PREEMPT_CONNECTION)
+        }
         application.registerReceiver(
             engineReadyReceiver,
-            IntentFilter(SonyBridge.ACTION_ENGINE_READY),
+            filter,
             Context.RECEIVER_EXPORTED,
         )
         installKeepConnectionServiceHooks(coordinator)
@@ -303,6 +308,26 @@ object SoundConnectHandoverHook : HookContext() {
             }
         }
 
+        fun onPreemptRequested(reason: String) {
+            synchronized(this) {
+                if (startedActivities.isNotEmpty()) {
+                    Log.d(TAG, "preempt requested but Sound Connect is currently in foreground; ignoring")
+                    return
+                }
+                Log.d(TAG, "preempt requested while Sound Connect is backgrounded; releasing lease and disconnecting MDR sessions")
+                cancelPendingReleaseLocked()
+                releaseLocked(reason)
+                activeMdrControllers.forEach { controller ->
+                    runCatching {
+                        callMethod(controller, "V0")
+                        Log.d(TAG, "successfully called V0 on MDR controller to yield socket")
+                    }.onFailure {
+                        Log.w(TAG, "failed to call V0 on MDR controller", it)
+                    }
+                }
+            }
+        }
+
         private fun reconcileLocked(reason: String) {
             if (hasActiveHoldLocked()) {
                 cancelPendingReleaseLocked()
@@ -314,9 +339,7 @@ object SoundConnectHandoverHook : HookContext() {
 
         private fun hasActiveHoldLocked(): Boolean =
             creatingActivities.isNotEmpty() ||
-                startedActivities.isNotEmpty() ||
-                activeKeepConnectionServices.isNotEmpty() ||
-                activeMdrControllers.isNotEmpty()
+                startedActivities.isNotEmpty()
 
         private fun holdSummaryLocked(): String =
             "creating=${creatingActivities.size} started=${startedActivities.size} " +

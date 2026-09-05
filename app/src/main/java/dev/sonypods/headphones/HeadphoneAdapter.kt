@@ -52,6 +52,7 @@ enum class HeadphoneFeature {
     /** Safe Listening: the current sound pressure (dB) readout polled from the
      * headset via SAFE_LISTENING_GET_EXTENDED_PARAM (V2 Table2). */
     SAFE_LISTENING,
+    LISTENING_MODE,
 }
 
 enum class LeaDeviceKind {
@@ -631,6 +632,11 @@ interface HeadphoneAdapter {
 
     fun buildSetPlaybackVolumeCommands(profile: ConnectedHeadphoneProfile, volume: Int): List<HeadphoneCommand> =
         emptyList()
+
+    fun buildSetListeningModeCommands(
+        profile: ConnectedHeadphoneProfile,
+        mode: dev.sonypods.protocol.ListeningMode,
+    ): List<HeadphoneCommand> = emptyList()
 
     fun parse(profile: ConnectedHeadphoneProfile, channel: TandemChannel, raw: ByteArray): ParsedTandemResponse
 

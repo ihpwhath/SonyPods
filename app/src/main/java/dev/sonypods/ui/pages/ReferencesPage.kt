@@ -71,6 +71,10 @@ fun ReferencesPage(
 
 private val referenceProjects = listOf(
     ReferenceProject(
+        name = "SonyPods",
+        url = "https://github.com/Mercury000/SonyPods",
+    ),
+    ReferenceProject(
         name = "OpenBuds",
         url = "https://github.com/IgnotusJee/OpenBuds",
     ),
