@@ -303,24 +303,8 @@ object MiLinkServiceHook : HookContext() {
                     control.layoutParams = lp
                 }
             }
-            shrinkChildrenToWrapContent(control)
             control.requestLayout()
             root.requestLayout()
-        }
-    }
-
-    private fun shrinkChildrenToWrapContent(view: android.view.View) {
-        if (view !is android.view.ViewGroup) return
-        val lp = view.layoutParams
-        if (lp != null) {
-            if (view is android.widget.ScrollView ||
-                (view is android.widget.LinearLayout && (lp.height > 0 || lp.height == android.view.ViewGroup.LayoutParams.MATCH_PARENT))) {
-                lp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                view.layoutParams = lp
-            }
-        }
-        for (i in 0 until view.childCount) {
-            shrinkChildrenToWrapContent(view.getChildAt(i))
         }
     }
 
