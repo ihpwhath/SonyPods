@@ -247,66 +247,9 @@ object MiLinkServiceHook : HookContext() {
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetInfo constructor skipped", it) }
-        hookHeadSetsDetailLayout()
+
     }
 
-    private fun hookHeadSetsDetailLayout() {
-        val detailClass = "com.miui.circulateplus.world.headset.HeadSetsDetail"
-        runCatching {
-            hookBefore(findMethod(detailClass, "C")) {
-                val view = instance as? android.view.ViewGroup ?: return@hookBefore
-                tightenHeadsetCard(view)
-                this.result = null
-            }
-        }.onFailure { Log.d(TAG, "hook HeadSetsDetail.C skipped", it) }
-
-        runCatching {
-            hookAfter(findMethod(detailClass, "onAttachedToWindow")) {
-                val view = instance as? android.view.ViewGroup ?: return@hookAfter
-                tightenHeadsetCard(view)
-                view.post { tightenHeadsetCard(view) }
-            }
-        }.onFailure { Log.d(TAG, "hook HeadSetsDetail.onAttachedToWindow skipped", it) }
-
-        runCatching {
-            hookAfter(findMethod(detailClass, "onFinishInflate")) {
-                val view = instance as? android.view.ViewGroup ?: return@hookAfter
-                tightenHeadsetCard(view)
-                view.post { tightenHeadsetCard(view) }
-            }
-        }.onFailure { Log.d(TAG, "hook HeadSetsDetail.onFinishInflate skipped", it) }
-
-        runCatching {
-            hookAfter(findMethod("android.view.View", "onAttachedToWindow")) {
-                val view = instance as? android.view.ViewGroup ?: return@hookAfter
-                if (view.javaClass.name == detailClass) {
-                    tightenHeadsetCard(view)
-                    view.post { tightenHeadsetCard(view) }
-                }
-            }
-        }.onFailure { Log.d(TAG, "hook View.onAttachedToWindow for HeadSetsDetail skipped", it) }
-    }
-
-    private fun tightenHeadsetCard(view: android.view.View) {
-        val root = view as? android.view.ViewGroup ?: return
-        runCatching {
-            val control = runCatching { getObjectField(root, "T") as? android.view.View }.getOrNull()
-                ?: (0 until root.childCount).map { root.getChildAt(it) }.firstOrNull { it is android.widget.LinearLayout }
-                ?: root
-            runCatching<Unit> {
-                val folmeClass = findClass("miuix.animation.Folme")
-                folmeClass.getMethod("clean", android.view.View::class.java).invoke(null, control)
-            }
-            control.layoutParams?.let { lp ->
-                if (lp.height != android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {
-                    lp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                    control.layoutParams = lp
-                }
-            }
-            control.requestLayout()
-            root.requestLayout()
-        }
-    }
 
     /**
      * Keeps an AncBatteryModel present for the Sony pod so the Fusion ANC controls render.
