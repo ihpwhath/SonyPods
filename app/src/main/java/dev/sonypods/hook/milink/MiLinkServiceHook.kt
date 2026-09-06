@@ -1045,7 +1045,7 @@ object MiLinkServiceHook : HookContext() {
      */
     private fun loadState() {
         if (stateSeeded) return
-        val ctx = context ?: runCatching { de.robv.android.xposed.AndroidAppHelper.currentApplication() }.getOrNull() ?: return
+        val ctx = context ?: runCatching<android.app.Application> { callStaticMethod(findClass("android.app.ActivityThread"), "currentApplication") as android.app.Application }.getOrNull() ?: return
         val prefs = ctx.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
         stateSeeded = true
         currentAddress = prefs.getString("address", currentAddress)
@@ -1093,40 +1093,23 @@ object MiLinkServiceHook : HookContext() {
         loadState()
         for (info in infos) {
             if (info == null) continue
-            val deviceId = runCatching { getObjectField(info, "deviceId") as? String }.getOrNull()
-            if (deviceId != null && isSonyAddress(deviceId)) return true
-            
-            val name = runCatching { getObjectField(info, "deviceName") as? String }.getOrNull()
-            if (name != null) {
-                if (name == currentName || name.contains("WF-") || name.contains("WH-") || name.contains("LinkBuds") || name.contains("Sony", ignoreCase = true)) {
-                    if (deviceId != null && currentAddress == null) currentAddress = deviceId
-                    return true
-                }
-            }
             
             val props = runCatching { getObjectField(info, "serviceProperties") }.getOrNull()
-            val extra = runCatching {
-                callMethod(props, "getAll") as? android.os.Bundle ?: getObjectField(props, "extraBundle") as? android.os.Bundle
-            }.getOrNull()
-            if (extra != null) {
-                val hid = extra.getString("headset_id")
-                if (hid == "01013A04" || hid?.startsWith("0101") == true) return true
-                val addr = extra.getString("device_address") ?: extra.getString("address")
-                if (addr != null && isSonyAddress(addr)) return true
+            val extra = runCatching { callMethod(props, "getAll") as? android.os.Bundle ?: getObjectField(props, "extraBundle") as? android.os.Bundle }.getOrNull()
+            if (extra?.getString("headset_id")?.startsWith("0101") == true) return true
+            if (isSonyAddress(extra?.getString("device_address") ?: extra?.getString("address") ?: "")) return true
+
+            val deviceId = runCatching { getObjectField(info, "deviceId") as? String }.getOrNull()
+            if (deviceId != null && isSonyAddress(deviceId)) return true
+
+            val name = runCatching { getObjectField(info, "deviceName") as? String }.getOrNull()
+            if (name != null && (name == currentName || name.contains("WF-") || name.contains("WH-") || name.contains("LinkBuds") || name.contains("Sony", ignoreCase = true))) {
+                if (deviceId != null && currentAddress == null) currentAddress = deviceId
+                return true
             }
             
-            val device = runCatching {
-                val model = getObjectField(info, "model")
-                callMethod(model, "getBluetoothDevice") as? android.bluetooth.BluetoothDevice
-            }.getOrNull()
-            if (device != null) {
-                if (isSonyAddress(device.address)) return true
-                val dName = runCatching { device.name }.getOrNull()
-                if (dName != null && (dName == currentName || dName.contains("WF-") || dName.contains("WH-") || dName.contains("LinkBuds") || dName.contains("Sony", ignoreCase = true))) {
-                    if (currentAddress == null) currentAddress = device.address
-                    return true
-                }
-            }
+            val device = runCatching { callMethod(getObjectField(info, "model"), "getBluetoothDevice") as? android.bluetooth.BluetoothDevice }.getOrNull()
+            if (device != null && isSonyAddress(device.address)) return true
         }
         return false
     }
@@ -1238,24 +1221,27 @@ object MiLinkServiceHook : HookContext() {
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.getBluetoothDeviceBattery skipped", it) }
     }
 
+
     internal fun fixBlackEdgesSafe() {
+        val detailClass = "com.miui.circulateplus.world.headset.HeadSetsDetail"
         runCatching {
-            hookBefore(findMethod("android.widget.LinearLayout", "onMeasure", Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!)) {
-                val layout = instance as? android.view.ViewGroup ?: return@hookBefore
-                val name = layout.javaClass.name
-                if (name.contains("HeadSetsDetail") || name.contains("HeadsetControl")) {
-                    try {
-                        val folmeClass = findClass("miuix.animation.Folme")
-                        folmeClass.getMethod("clean", android.view.View::class.java).invoke(null, layout)
-                    } catch (e: Throwable) {}
-                    val lp = layout.layoutParams
+            hookAfter(findMethod(detailClass, "onAttachedToWindow")) {
+                val root = instance as? android.view.ViewGroup ?: return@hookAfter
+                root.post {
+                    val control = runCatching { getObjectField(root, "T") as? android.view.View }.getOrNull()
+                        ?: (0 until root.childCount).map { root.getChildAt(it) }.firstOrNull { it is android.widget.LinearLayout }
+                        ?: root
+                    runCatching {
+                        callStaticMethod(findClass("miuix.animation.Folme"), "clean", control)
+                    }
+                    val lp = control.layoutParams
                     if (lp != null && lp.height != android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {
                         lp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                        control.layoutParams = lp
+                        control.requestLayout()
                     }
                 }
             }
         }.onFailure { android.util.Log.d(TAG, "fixBlackEdgesSafe skipped", it) }
     }
 }
-
-
