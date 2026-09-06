@@ -253,6 +253,14 @@ object MiLinkServiceHook : HookContext() {
     private fun hookHeadSetsDetailLayout() {
         val detailClass = "com.miui.circulateplus.world.headset.HeadSetsDetail"
         runCatching {
+            hookBefore(findMethod(detailClass, "C")) {
+                val view = instance as? android.view.ViewGroup ?: return@hookBefore
+                tightenHeadsetCard(view)
+                this.result = null
+            }
+        }.onFailure { Log.d(TAG, "hook HeadSetsDetail.C skipped", it) }
+
+        runCatching {
             hookAfter(findMethod(detailClass, "onAttachedToWindow")) {
                 val view = instance as? android.view.ViewGroup ?: return@hookAfter
                 tightenHeadsetCard(view)
@@ -282,14 +290,21 @@ object MiLinkServiceHook : HookContext() {
     private fun tightenHeadsetCard(view: android.view.View) {
         val root = view as? android.view.ViewGroup ?: return
         runCatching {
-            root.layoutParams?.let { lp ->
+            val control = runCatching { getObjectField(root, "T") as? android.view.View }.getOrNull()
+                ?: (0 until root.childCount).map { root.getChildAt(it) }.firstOrNull { it is android.widget.LinearLayout }
+                ?: root
+            runCatching {
+                val folmeClass = findClass("miuix.animation.Folme")
+                callStaticMethod(folmeClass, "clean", control)
+            }
+            control.layoutParams?.let { lp ->
                 if (lp.height != android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {
                     lp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                    root.layoutParams = lp
+                    control.layoutParams = lp
                 }
             }
-            shrinkChildrenToWrapContent(root)
-            root.setPadding(root.paddingLeft, 0, root.paddingRight, 0)
+            shrinkChildrenToWrapContent(control)
+            control.requestLayout()
             root.requestLayout()
         }
     }
@@ -1219,6 +1234,7 @@ object MiLinkServiceHook : HookContext() {
                         runCatching { setObjectField(model, "ancState", miLinkMode) }
                     }
                     this.result = java.util.concurrent.CompletableFuture.completedFuture(100)
+                    pushStateToPanel()
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.setNoiseCancelling skipped", it) }
@@ -1231,6 +1247,7 @@ object MiLinkServiceHook : HookContext() {
                     val mode = spatialModeFromMiLink(miLinkMode)
                     updateSpatialAudioMode(mode)
                     this.result = java.util.concurrent.CompletableFuture.completedFuture(100)
+                    pushStateToPanel()
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.setAudioEffect skipped", it) }
@@ -1248,7 +1265,7 @@ object MiLinkServiceHook : HookContext() {
             hookBefore(findMethod(controllerClass, "getSupportAncMode", findClass(serviceInfoClass))) {
                 val serviceInfo = args.firstOrNull() ?: return@hookBefore
                 if (isSonyCirculateService(serviceInfo)) {
-                    this.result = java.util.concurrent.CompletableFuture.completedFuture(1)
+                    this.result = java.util.concurrent.CompletableFuture.completedFuture(2)
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.getSupportAncMode skipped", it) }
