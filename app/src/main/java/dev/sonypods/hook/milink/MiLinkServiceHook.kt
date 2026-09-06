@@ -1089,36 +1089,30 @@ object MiLinkServiceHook : HookContext() {
     }
 
     private fun isSonyCirculateService(serviceInfo: Any?): Boolean {
-        if (serviceInfo == null) return false
         loadState()
-        val serviceId = runCatching { getObjectField(serviceInfo, "serviceId") as? String }.getOrNull()
-        if (!serviceId.isNullOrBlank()) {
-            if (serviceId.contains("索尼", ignoreCase = true) ||
-                serviceId.contains("Sony", ignoreCase = true) ||
-                serviceId.contains("WH-", ignoreCase = true) ||
-                serviceId.contains("WF-", ignoreCase = true) ||
-                serviceId.contains("LinkBuds", ignoreCase = true) ||
-                serviceId.equals(currentName, ignoreCase = true)) {
+        if (serviceInfo == null) return false
+        val deviceId = runCatching { getObjectField(serviceInfo, "deviceId") as? String }.getOrNull()
+        if (deviceId != null && isSonyAddress(deviceId)) {
+            return true
+        }
+        val name = runCatching { getObjectField(serviceInfo, "deviceName") as? String }.getOrNull()
+        if (name != null) {
+            if (name == currentName || name.contains("WF-") || name.contains("WH-") || name.contains("LinkBuds") || name.contains("Sony", ignoreCase = true)) {
+                if (deviceId != null && currentAddress == null) currentAddress = deviceId
                 return true
             }
         }
-        val deviceId = runCatching { getObjectField(serviceInfo, "deviceId") as? String }.getOrNull()
-        if (!deviceId.isNullOrBlank()) {
-            if (isSonyAddress(deviceId) || deviceId.equals(currentAddress, ignoreCase = true)) return true
-        }
-        val props = runCatching { getObjectField(serviceInfo, "serviceProperties") }.getOrNull()
-        val extra = runCatching {
-            callMethod(props, "getAll") as? android.os.Bundle
-                ?: getObjectField(props, "extraBundle") as? android.os.Bundle
+        val device = runCatching {
+            val model = getObjectField(serviceInfo, "model")
+            callMethod(model, "getBluetoothDevice") as? android.bluetooth.BluetoothDevice
         }.getOrNull()
-        if (extra != null) {
-            val hid = extra.getString("headset_id")
-            if (hid == "01013A04" || hid?.startsWith("0101") == true) return true
-            val addr = extra.getString("device_address") ?: extra.getString("address")
-            if (addr != null && isSonyAddress(addr)) return true
-        }
-        if (!currentAddress.isNullOrBlank() || !currentName.isNullOrBlank()) {
-            return true
+        if (device != null) {
+            if (isSonyAddress(device.address)) return true
+            val dName = runCatching { device.name }.getOrNull()
+            if (dName != null && (dName == currentName || dName.contains("WF-") || dName.contains("WH-") || dName.contains("LinkBuds") || dName.contains("Sony", ignoreCase = true))) {
+                if (currentAddress == null) currentAddress = device.address
+                return true
+            }
         }
         return false
     }
@@ -1166,6 +1160,9 @@ object MiLinkServiceHook : HookContext() {
                         runCatching { setObjectField(model, "ancState", miLinkMode) }
                     }
                     this.result = java.util.concurrent.CompletableFuture.completedFuture(0)
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        pushStateToPanel()
+                    }
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.setNoiseCancelling skipped", it) }
@@ -1182,6 +1179,9 @@ object MiLinkServiceHook : HookContext() {
                     val mode = spatialModeFromMiLink(miLinkMode)
                     updateSpatialAudioMode(mode)
                     this.result = java.util.concurrent.CompletableFuture.completedFuture(0)
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        pushStateToPanel()
+                    }
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.setAudioEffect skipped", it) }
@@ -1232,4 +1232,5 @@ object MiLinkServiceHook : HookContext() {
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.getBluetoothDeviceBattery skipped", it) }
     }
 }
+
 
