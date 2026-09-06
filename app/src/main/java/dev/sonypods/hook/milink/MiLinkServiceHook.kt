@@ -1045,7 +1045,7 @@ object MiLinkServiceHook : HookContext() {
      */
     private fun loadState() {
         if (stateSeeded) return
-        val ctx = context ?: runCatching<android.app.Application> { this@MiLinkServiceHook.callStaticMethod(findClass("android.app.ActivityThread"), "currentApplication") as android.app.Application }.getOrNull() ?: return
+        val ctx = context ?: runCatching<android.app.Application> { findClass("android.app.ActivityThread").getMethod("currentApplication").invoke(null) as android.app.Application }.getOrNull() ?: return
         val prefs = ctx.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
         stateSeeded = true
         currentAddress = prefs.getString("address", currentAddress)
@@ -1232,7 +1232,7 @@ object MiLinkServiceHook : HookContext() {
                         ?: (0 until root.childCount).map { root.getChildAt(it) }.firstOrNull { it is android.widget.LinearLayout }
                         ?: root
                     runCatching<Unit> {
-                        this@MiLinkServiceHook.callStaticMethod(findClass("miuix.animation.Folme"), "clean", control)
+                        findClass("miuix.animation.Folme").getMethod("clean", android.view.View::class.java).invoke(null, control)
                     }
                     val lp = control.layoutParams
                     if (lp != null && lp.height != android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {
