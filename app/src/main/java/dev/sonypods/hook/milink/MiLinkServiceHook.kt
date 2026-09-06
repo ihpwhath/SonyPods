@@ -751,9 +751,9 @@ object MiLinkServiceHook : HookContext() {
     internal fun miLinkAncState(): Int {
         loadState()
         return when (currentAnc) {
-            2, 5, 6, 7, 8 -> 1
-            3 -> 2
-            else -> 0
+            2, 5, 6, 7, 8 -> 0
+            3 -> 1
+            else -> 2
         }
     }
 
@@ -766,8 +766,9 @@ object MiLinkServiceHook : HookContext() {
 
     private fun sonyAncFromMiLink(mode: Int): Int {
         return when (mode) {
-            1 -> 2
-            2 -> 3
+            0 -> 2
+            1 -> 3
+            2 -> 1
             else -> 1
         }
     }
@@ -849,7 +850,7 @@ object MiLinkServiceHook : HookContext() {
         loadState()
         if (!spatialAudioPanelEnabled()) return -1
         return when (currentAudioEffectState()) {
-            ConfigManager.SPATIAL_AUDIO_HEAD_TRACKING -> if (miLinkDeviceSpatialType() == 1) 11 else 9
+            ConfigManager.SPATIAL_AUDIO_HEAD_TRACKING -> 2
             ConfigManager.SPATIAL_AUDIO_FIXED -> 1
             else -> 0
         }
@@ -857,7 +858,7 @@ object MiLinkServiceHook : HookContext() {
 
     internal fun spatialModeFromMiLink(mode: Int): Int {
         return when (mode) {
-            9, 11 -> ConfigManager.SPATIAL_AUDIO_HEAD_TRACKING
+            2, 9, 11 -> ConfigManager.SPATIAL_AUDIO_HEAD_TRACKING
             1 -> ConfigManager.SPATIAL_AUDIO_FIXED
             else -> ConfigManager.SPATIAL_AUDIO_OFF
         }
@@ -865,7 +866,7 @@ object MiLinkServiceHook : HookContext() {
 
     internal fun miLinkSpatialModeFromMode(mode: Int): Int {
         return when (mode) {
-            ConfigManager.SPATIAL_AUDIO_HEAD_TRACKING -> if (miLinkDeviceSpatialType() == 1) 11 else 9
+            ConfigManager.SPATIAL_AUDIO_HEAD_TRACKING -> 2
             ConfigManager.SPATIAL_AUDIO_FIXED -> 1
             ConfigManager.SPATIAL_AUDIO_OFF -> 0
             else -> -1
@@ -878,7 +879,7 @@ object MiLinkServiceHook : HookContext() {
     }
 
     internal fun miLinkDeviceSpatialType(): Int {
-        return if (spatialAudioPanelEnabled()) 1 else 0
+        return if (spatialAudioPanelEnabled()) 2 else 0
     }
 
     internal fun miLinkSwitchState(): Int {
@@ -1231,3 +1232,4 @@ object MiLinkServiceHook : HookContext() {
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.getBluetoothDeviceBattery skipped", it) }
     }
 }
+
