@@ -1045,7 +1045,8 @@ object MiLinkServiceHook : HookContext() {
      */
     private fun loadState() {
         if (stateSeeded) return
-        val prefs = context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) ?: return
+        val ctx = context ?: runCatching { de.robv.android.xposed.AndroidAppHelper.currentApplication() }.getOrNull() ?: return
+        val prefs = ctx.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
         stateSeeded = true
         currentAddress = prefs.getString("address", currentAddress)
         currentName = prefs.getString("name", currentName)
@@ -1101,6 +1102,17 @@ object MiLinkServiceHook : HookContext() {
                     if (deviceId != null && currentAddress == null) currentAddress = deviceId
                     return true
                 }
+            }
+            
+            val props = runCatching { getObjectField(info, "serviceProperties") }.getOrNull()
+            val extra = runCatching {
+                callMethod(props, "getAll") as? android.os.Bundle ?: getObjectField(props, "extraBundle") as? android.os.Bundle
+            }.getOrNull()
+            if (extra != null) {
+                val hid = extra.getString("headset_id")
+                if (hid == "01013A04" || hid?.startsWith("0101") == true) return true
+                val addr = extra.getString("device_address") ?: extra.getString("address")
+                if (addr != null && isSonyAddress(addr)) return true
             }
             
             val device = runCatching {
@@ -1245,4 +1257,5 @@ object MiLinkServiceHook : HookContext() {
         }.onFailure { android.util.Log.d(TAG, "fixBlackEdgesSafe skipped", it) }
     }
 }
+
 
