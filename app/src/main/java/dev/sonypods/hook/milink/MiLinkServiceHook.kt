@@ -1045,7 +1045,7 @@ object MiLinkServiceHook : HookContext() {
      */
     private fun loadState() {
         if (stateSeeded) return
-        val ctx = context ?: runCatching<android.app.Application> { de.robv.android.xposed.XposedHelpers.callStaticMethod(findClass("android.app.ActivityThread"), "currentApplication") as android.app.Application }.getOrNull() ?: return
+        val ctx = context ?: runCatching<android.app.Application> { this@MiLinkServiceHook.callStaticMethod(findClass("android.app.ActivityThread"), "currentApplication") as android.app.Application }.getOrNull() ?: return
         val prefs = ctx.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
         stateSeeded = true
         currentAddress = prefs.getString("address", currentAddress)
@@ -1232,7 +1232,7 @@ object MiLinkServiceHook : HookContext() {
                         ?: (0 until root.childCount).map { root.getChildAt(it) }.firstOrNull { it is android.widget.LinearLayout }
                         ?: root
                     runCatching<Unit> {
-                        de.robv.android.xposed.XposedHelpers.callStaticMethod(findClass("miuix.animation.Folme"), "clean", control)
+                        this@MiLinkServiceHook.callStaticMethod(findClass("miuix.animation.Folme"), "clean", control)
                     }
                     val lp = control.layoutParams
                     if (lp != null && lp.height != android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {
@@ -1245,3 +1245,4 @@ object MiLinkServiceHook : HookContext() {
         }.onFailure { android.util.Log.d(TAG, "fixBlackEdgesSafe skipped", it) }
     }
 }
+
