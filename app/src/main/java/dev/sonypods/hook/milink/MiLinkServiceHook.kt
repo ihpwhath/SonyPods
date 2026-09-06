@@ -1218,7 +1218,9 @@ object MiLinkServiceHook : HookContext() {
                         runCatching { setObjectField(model, "ancState", miLinkMode) }
                     }
                     this.result = java.util.concurrent.CompletableFuture.completedFuture(100)
-                    pushStateToPanel()
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        pushStateToPanel()
+                    }
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.setNoiseCancelling skipped", it) }
@@ -1231,7 +1233,9 @@ object MiLinkServiceHook : HookContext() {
                     val mode = spatialModeFromMiLink(miLinkMode)
                     updateSpatialAudioMode(mode)
                     this.result = java.util.concurrent.CompletableFuture.completedFuture(100)
-                    pushStateToPanel()
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        pushStateToPanel()
+                    }
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.setAudioEffect skipped", it) }
