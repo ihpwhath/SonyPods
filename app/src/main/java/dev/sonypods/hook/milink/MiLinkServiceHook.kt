@@ -293,9 +293,9 @@ object MiLinkServiceHook : HookContext() {
             val control = runCatching { getObjectField(root, "T") as? android.view.View }.getOrNull()
                 ?: (0 until root.childCount).map { root.getChildAt(it) }.firstOrNull { it is android.widget.LinearLayout }
                 ?: root
-            runCatching {
+            runCatching<Unit> {
                 val folmeClass = findClass("miuix.animation.Folme")
-                callStaticMethod(folmeClass, "clean", control)
+                folmeClass.getMethod("clean", android.view.View::class.java).invoke(null, control)
             }
             control.layoutParams?.let { lp ->
                 if (lp.height != android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {
