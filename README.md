@@ -1,99 +1,37 @@
 <div align="center">
 
-# SonyPods
+# SonyPods (小米融合中心修复增强版)
 
-**为 HyperOS 设备提供系统级 Sony 耳机控制**
-
-[![Platform](https://img.shields.io/badge/Platform-Android-green?style=flat-square&logo=android)](https://android.com)
-[![LSPosed](https://img.shields.io/badge/Framework-LSPosed-blueviolet?style=flat-square)](https://github.com/LSPosed/LSPosed)
-[![HyperOS](https://img.shields.io/badge/ROM-澎湃OS3-orange?style=flat-square)](https://hyperos.mi.com)
-
-**[English](README_EN.md)** | **简体中文**
+**为 HyperOS 设备提供系统级的 Sony 耳机弹窗与控制面板完美支持**
 
 </div>
 
-为小米 HyperOS 设备提供系统级 Sony 耳机控制的 Xposed 模块。
+本项目是 [SonyPods 原版](https://github.com/Mercury000/SonyPods) 的深度修改分支 (Fork)。原版项目虽然功能强大，但在**小米融合设备中心 (MiLink)** 的控制面板上存在严重的卡顿、假死、黑边以及杀后台后无法连接的问题。
 
-### 支持型号
+本分支专门针对小米用户的痛点进行了**底层重构与深度优化**，为你带来原生般的顺滑体验！
 
-理论支持所有已发布的索尼耳机
+### ✨ 本修改版专属特性
 
-### 耳机功能
+1. **零消耗消除黑边**：彻底重构了控制面板的布局渲染代码。去除了原版中导致 CPU 疯狂发热和界面假死的全局测量拦截，改用非侵入式的单次动画生命周期挂载。不仅完美消除了底部的巨大黑边，更让滑动和点击如丝般顺滑。
+2. **防丢失冷启动重构**：重写了蓝牙设备身份识别逻辑。引入了小米底层 headset_id 以及强行突破生命周期的全局应用上下文校验。彻底解决了“清理后台后，第一次打开面板总是提示设备可能不在附近”的恶性冷启动 Bug。
+3. **极速状态同步与看门狗**：修复了原版向小米融合中心返回错误状态码导致的 UI 冻结假死问题。加入了状态锁强制放行机制，在面板上飞速盲按“降噪/通透/关闭”，系统圈圈动画也会立即跟手，告别点击后僵死等待几百毫秒的迟钝感。
 
-- **降噪控制** — 关闭 / 降噪 / 环境声三态切换，环境声等级（1–20）与人声模式
-- **均衡器** — 官方预设 + Clear Bass + 自定义频段
-- **电量显示** — TWS 左 / 右 / 充电盒，头戴式单电量
-- **DSEE 音频增强** — 支持 DSEE / DSEE Extreme / DSEE Ultimate 升频功能开关
-- **连接质量模式** — 声音质量优先 / 稳定连接优先 切换
-- **LE Audio (LC3)** — 支持开启/关闭低功耗音频（LC3）
-- **音质徽标** — 实时识别并展示当前音频编码（LDAC / LC3 / AAC / SBC 等）与 DSEE 状态
-- **耳机关机** — 对支持 Sony USER_POWER_OFF 的型号发送关机命令
-- **播放控制** — 上一首 / 播放暂停 / 下一首
-- **状态读取** — LE Audio、Quick Access、佩戴检测、固件版本
-- **双设备管理** — 管理多设备连接
-- **手势操作** — 自定义手势操作、Quick Access 等
-- **Tandem 调试** — 查看 TX/RX 日志、发送原始 HEX 消息
+### 📦 安装与使用
 
-### 系统集成（HyperOS）
+1. 与原版一致，安装 APK 并在 LSPosed 中勾选激活。
+2. 推荐勾选的作用域：com.android.bluetooth、com.milink.service、com.xiaomi.bluetooth、com.android.settings、com.sony.songpal.mdr。
+3. 重启手机或相关服务后即可享受完美的融合中心体验。
 
-- **型号伪装** — 将 Sony 耳机伪装为受支持的小米耳机，接入系统耳机 UI
-- **系统设置页深度集成** — 在系统蓝牙耳机详情页注入固件版本、音质徽标，精简隐藏不适用的降噪深度条
-- **系统蓝牙电量注入** — 电量实时同步到系统蓝牙栈
-- **超级岛 / 焦点通知** — 连接与电量岛、AOD 息屏电量、通知栏降噪循环按钮
-- **融合设备中心** — 电量与降噪状态读写
-- **快捷弹窗** — 点击通知弹出控制浮窗、连接时弹窗（支持应用黑白名单）
-- **型号图片** — 按 Sound Connect 型号与颜色目录自动匹配，不提供自定义图片入口
-- **设备流转** — 支持小米互联设备流转，参与流转的另一台设备需先与该耳机配对一次，并安装、启用本模块（不建议与双设备连接同时使用，会导致冲突）
+*(其他关于索尼耳机的专属功能、DSEE 等特性完全继承自原版，请放心使用。)*
 
-### 使用
+### 💖 支持修复工作
 
-1. 安装 APK，在 LSPosed 中启用模块，勾选作用域：
-   `com.android.bluetooth`、`com.milink.service`、`com.xiaomi.bluetooth`、`com.android.settings`、`com.sony.songpal.mdr`
-   （`com.sony.songpal.mdr` 为 Sony Sound Connect 官方包名，用于在官方 App 的界面、后台保活服务或控制会话活跃时让出耳机连接，并在官方控制会话结束后自动恢复。）
-2. 重启作用域（App 内可一键 root 重启）
-3. 打开 App 授予蓝牙 / 通知权限，连接 Sony 耳机
-
-### 无ROOT或其他手机使用
-
-对于无ROOT或其他手机用户，你可以在[actions](https://github.com/Mercury000/SonyPods/actions/workflows/build-noroot.yml)中下载noroot版本作为第三方控制软件，但没有系统集成等功能
-
-### 环境
-
-- HyperOS（Android 14+）
-- LSPosed（libxposed API 102）
-
-### 致谢
-
-- [OppoPods-Enhanced](https://github.com/1812z/OppoPods) — HyperOS 系统集成外壳来源
-- [OpenBuds](https://github.com/IgnotusJee/OpenBuds) — 项目早期 Sony Tandem 协议栈来源
-
-### 问题反馈
-
-- [提交issue](https://github.com/Mercury000/SonyPods/issues/new)
-- [Telegram频道私信](https://t.me/sonypods)
-- [QQ群1090259252](https://qm.qq.com/q/afQhNE2QUg)
-
-### 支持我的开发  
-
-你可以通过下方赞赏码支持我的开发，或通过我的aff注册[Agent Router公益站](https://agentrouter.org/register?aff=HRHy)，你可以获得175刀的token，我也能获得相应token以维持开发  
-
-![赞赏码](docs/donation.webp)
-
----
-
-## 修改版特别说明 (Modified Version Note)
-
-本分支（Fork）在原版 SonyPods 的基础上，深度重构并完善了对 **小米融合设备中心 (MiLink)** 的支持：
-1. **解决卡顿与黑边**：通过非侵入式的测量与动画拦截，彻底解决了原版在小米设备上控制面板下方的黑边问题，并清除了由此导致的 CPU 发热和假死死锁。
-2. **重构设备识别（防丢失）**：引入底层的 headset_id 与全局应用上下文校验，解决了“清理后台后打开面板显示设备不在附近”的冷启动顽疾。
-3. **极速状态同步**：加入了状态锁强制放行机制，确保在控制中心极速点击降噪、通透等按钮时面板无延迟、不冻结。
-
-感谢原作者 [Mercury](https://github.com/cjybyjk) 开源的出色框架！本修改版基于 GPL-3.0 协议开源，完全遵守原协议精神。
-
-### 💖 支持我的修改工作
-
-如果你觉得这个为小米融合中心深度适配的修改版对你有帮助，让你的索尼耳机在小米手机上用得更爽了，欢迎通过下方微信赞赏码请我喝杯咖啡！你的支持是我继续维护和修复底层 Bug 的动力：
+逆向和适配厂商未公开的系统代码是一件非常消耗精力的硬核工作。如果你觉得这个为小米融合中心深度适配的修改版对你有帮助，让你的索尼耳机在小米手机上用得更爽了，欢迎通过下方微信赞赏码请我喝杯咖啡！你的支持是我继续维护和修复各种疑难杂症的最大动力：
 
 ![微信赞赏码](assets/wechat_reward.png)
 
+---
 
+### 📜 鸣谢与协议
+
+感谢原作者 [Mercury](https://github.com/cjybyjk) 以及开源社区的出色工作！本修改版基于 [GPL-3.0 协议](LICENSE) 开源，严格遵守开源精神。如需反馈原版特性的 Bug，请前往 [原版项目仓库](https://github.com/Mercury000/SonyPods)。
