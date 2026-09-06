@@ -1151,6 +1151,10 @@ object MiLinkServiceHook : HookContext() {
             hookBefore(findMethod(controllerClass, "setNoiseCancelling", findClass(serviceInfoClass), Int::class.javaPrimitiveType!!)) {
                 val serviceInfo = args.firstOrNull() ?: return@hookBefore
                 if (isSonyCirculateService(serviceInfo)) {
+                    val instanceContext = runCatching { getObjectField(instance, "context") as? android.content.Context }.getOrNull() ?: runCatching { getObjectField(instance, "mContext") as? android.content.Context }.getOrNull()
+                    if (instanceContext != null) {
+                        context = instanceContext.applicationContext ?: instanceContext
+                    }
                     val miLinkMode = args[1] as? Int ?: 0
                     val sonyAnc = sonyAncFromMiLink(miLinkMode)
                     currentAnc = sonyAnc
@@ -1160,10 +1164,7 @@ object MiLinkServiceHook : HookContext() {
                     if (model != null) {
                         runCatching { setObjectField(model, "ancState", miLinkMode) }
                     }
-                    this.result = java.util.concurrent.CompletableFuture.completedFuture(100)
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        pushStateToPanel()
-                    }
+                    this.result = java.util.concurrent.CompletableFuture.completedFuture(0)
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.setNoiseCancelling skipped", it) }
@@ -1172,13 +1173,14 @@ object MiLinkServiceHook : HookContext() {
             hookBefore(findMethod(controllerClass, "setAudioEffect", findClass(serviceInfoClass), Int::class.javaPrimitiveType!!)) {
                 val serviceInfo = args.firstOrNull() ?: return@hookBefore
                 if (isSonyCirculateService(serviceInfo)) {
+                    val instanceContext = runCatching { getObjectField(instance, "context") as? android.content.Context }.getOrNull() ?: runCatching { getObjectField(instance, "mContext") as? android.content.Context }.getOrNull()
+                    if (instanceContext != null) {
+                        context = instanceContext.applicationContext ?: instanceContext
+                    }
                     val miLinkMode = args[1] as? Int ?: 0
                     val mode = spatialModeFromMiLink(miLinkMode)
                     updateSpatialAudioMode(mode)
-                    this.result = java.util.concurrent.CompletableFuture.completedFuture(100)
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        pushStateToPanel()
-                    }
+                    this.result = java.util.concurrent.CompletableFuture.completedFuture(0)
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.setAudioEffect skipped", it) }
