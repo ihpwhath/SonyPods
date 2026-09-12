@@ -1133,7 +1133,7 @@ object MiLinkServiceHook : HookContext() {
         runCatching {
             hookBefore(findMethod(controllerClass, "isMmaHeadset", findClass(deviceInfoClass), findClass(serviceInfoClass))) {
                 if (isSonyCirculateService(*args.toTypedArray())) {
-                    this.result = java.util.concurrent.CompletableFuture.completedFuture(false)
+                    this.result = java.util.concurrent.CompletableFuture.completedFuture(true)
                 }
             }
         }.onFailure { Log.d(TAG, "hook HeadsetServiceController.isMmaHeadset skipped", it) }

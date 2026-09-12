@@ -189,7 +189,7 @@ object ConfigManager {
     const val PREF_KEY_ANC_IMPLEMENTATION_CAPABILITY_OVERRIDE = "anc_implementation_capability_override"
     const val PREF_KEY_ANC_CYCLE_MODES = "anc_cycle_modes"
     const val PREF_KEY_STARTUP_TAB = "startup_tab"
-    const val DEFAULT_FAKE_DEVICE_ID = "01010607"
+    const val DEFAULT_FAKE_DEVICE_ID = "01013A04"
     const val LOG_LEVEL_OFF = 0
     const val LOG_LEVEL_BASIC = 1
     const val LOG_LEVEL_DEBUG = 2
