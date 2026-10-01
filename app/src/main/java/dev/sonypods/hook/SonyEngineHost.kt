@@ -556,6 +556,7 @@ object SonyEngineHost {
     }
 
     @SuppressLint("MissingPermission")
+    @Synchronized
     fun connectDevice(device: BluetoothDevice, force: Boolean = false) {
         if (officialAppOwnsTandem) {
             Log.d(TAG, "connect skipped while Sound Connect owns Tandem")
@@ -563,7 +564,7 @@ object SonyEngineHost {
         }
         val repo = repository ?: return
         val address = runCatching { device.address }.getOrNull() ?: return
-        if (!force && matchesReleasedHeadset(address)) {
+        if (matchesReleasedHeadset(address)) {
             Log.d(TAG, "connect skipped: $address was deliberately released by a device-level disconnect")
             return
         }
@@ -921,9 +922,11 @@ object SonyEngineHost {
     fun onLinkConnected(address: String) {
         // A real profile-level connect is the headset choosing this host again; the deliberate
         // release that suppressed [reconcileConnection] is over.
-        if (releasedAddress != null && matchesReleasedHeadset(address)) {
-            Log.d(TAG, "headset reconnected; release hold cleared for $address")
-            releasedAddress = null
+        synchronized(this) {
+            if (releasedAddress != null && matchesReleasedHeadset(address)) {
+                Log.d(TAG, "headset reconnected; release hold cleared for $address")
+                releasedAddress = null
+            }
         }
         linkTracker.onLinkConnected(address)
     }
@@ -990,7 +993,9 @@ object SonyEngineHost {
         val control = SonyDeviceService.resolveControlAddress(address)
             ?.takeIf { !it.equals(address, ignoreCase = true) }
             ?: address
-        releasedAddress = control
+        synchronized(this) {
+            releasedAddress = control
+        }
         val session = repo.state.value.connectedDevice?.address
         if (session == null) {
             Log.d(TAG, "device-level disconnect for $address: no live Tandem session to release")
