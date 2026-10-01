@@ -163,8 +163,10 @@ object SonyEngineHost {
     private var lastRenderedAddress: String? = null
     /** Last device reported connected by Tandem, including while its transport is down. */
     private var lastConnectedAddress: String? = null
+    @Volatile
     private var lastConnectAttemptMs = 0L
     /** Prevent startAfterReload and the A2DP proxy callback from opening two sessions. */
+    @Volatile
     private var connectInFlightAddress: String? = null
     /**
      * A headset deliberately released by a device-level disconnect (Settings "断开连接" or a
@@ -647,9 +649,6 @@ object SonyEngineHost {
         Log.d(TAG, "reconciling: ${device.address} is connected but has no Tandem session")
         connectDevice(device, force = true)
     }
-
-    /** Whether [address] belongs to the headset this host deliberately released at the last device-level disconnect. */
-    fun isReleasedHeadset(address: String): Boolean = matchesReleasedHeadset(address)
 
     private fun matchesReleasedHeadset(address: String): Boolean {
         val released = releasedAddress ?: return false
