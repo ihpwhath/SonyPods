@@ -25,6 +25,7 @@ import dev.sonypods.hook.setObjectField
 import dev.sonypods.utils.miuiStrongToast.data.BatteryParams
 import dev.sonypods.utils.miuiStrongToast.data.SonyPodsAction
 import dev.sonypods.utils.miuiStrongToast.data.PodParams
+import java.util.concurrent.ConcurrentHashMap
 
 @SuppressLint("MissingPermission")
 object MiLinkServiceHook : HookContext() {
@@ -45,6 +46,16 @@ object MiLinkServiceHook : HookContext() {
     /** headsetPropertyChangeListener update types observed in the MiUI headset runtime. */
     private const val UPDATE_TYPE_BATTERY = 4
     private const val UPDATE_TYPE_ANC = 8
+    private class PropertyBlockKey(val controller: Any, val address: String) {
+        override fun equals(other: Any?): Boolean =
+            other is PropertyBlockKey &&
+                controller === other.controller &&
+                address == other.address
+
+        override fun hashCode(): Int = 31 * System.identityHashCode(controller) + address.hashCode()
+    }
+
+    private val propertyBlocksInFlight = ConcurrentHashMap.newKeySet<PropertyBlockKey>()
     internal var context: Context? = null
     private var receiverRegistered = false
     private var stateSeeded = false
@@ -337,10 +348,26 @@ object MiLinkServiceHook : HookContext() {
                         cacheAncBatteryController(instance)
                         captureRuntimeContext(instance)
                         if (!isSonyPod(device)) return@hookBefore
-                        ensureAncBatteryModel(notify = false)
-                        notifyHeadsetPropertyChanged(instance, device, UPDATE_TYPE_BATTERY)
-                        notifyHeadsetPropertyChanged(instance, device, UPDATE_TYPE_ANC)
                         this.result = 100
+                        val address = try {
+                            device.address.uppercase()
+                        } catch (failure: SecurityException) {
+                            Log.w(TAG, "property block device address unavailable; skipping notification", failure)
+                            return@hookBefore
+                        }
+                        val controller = instance ?: run {
+                            Log.w(TAG, "property block controller unavailable; skipping notification")
+                            return@hookBefore
+                        }
+                        val key = PropertyBlockKey(controller, address)
+                        if (!propertyBlocksInFlight.add(key)) return@hookBefore
+                        try {
+                            ensureAncBatteryModel(notify = false)
+                            notifyHeadsetPropertyChanged(controller, device, UPDATE_TYPE_BATTERY)
+                            notifyHeadsetPropertyChanged(controller, device, UPDATE_TYPE_ANC)
+                        } finally {
+                            propertyBlocksInFlight.remove(key)
+                        }
                     }
                 }
         }.onFailure { Log.d(TAG, "hook AncBatteryController.getHeadsetPropertyBlock skipped", it) }
@@ -1243,4 +1270,3 @@ object MiLinkServiceHook : HookContext() {
         }.onFailure { android.util.Log.d(TAG, "fixBlackEdgesSafe skipped", it) }
     }
 }
-
