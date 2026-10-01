@@ -140,19 +140,35 @@ abstract class HookContext {
 
     fun findClass(name: String): Class<*> = Class.forName(name, false, appClassLoader)
 
-    fun findMethod(className: String, methodName: String, vararg parameterTypes: Class<*>): Method =
-        findClass(className).getDeclaredMethod(methodName, *parameterTypes).apply { isAccessible = true }
+    fun findMethod(className: String, methodName: String, vararg parameterTypes: Class<*>): Method {
+        var clazz: Class<*>? = findClass(className)
+        while (clazz != null) {
+            try {
+                return clazz.getDeclaredMethod(methodName, *parameterTypes).apply { isAccessible = true }
+            } catch (_: NoSuchMethodException) {
+                clazz = clazz.superclass
+            }
+        }
+        throw NoSuchMethodException("$className.$methodName")
+    }
 
     fun findConstructor(className: String, vararg parameterTypes: Class<*>): Constructor<*> =
         findClass(className).getDeclaredConstructor(*parameterTypes).apply { isAccessible = true }
 
-    fun findMethodByParamCount(className: String, methodName: String, paramCount: Int): Method =
-        findClass(className).declaredMethods
-            .filter { it.name == methodName && it.parameterTypes.size == paramCount }
-            .sortedBy { it.parameterTypes.joinToString(",") { type -> type.name } + ":" + it.returnType.name }
-            .firstOrNull()
-            ?.apply { isAccessible = true }
-            ?: throw NoSuchMethodException("$className.$methodName/$paramCount")
+    fun findMethodByParamCount(className: String, methodName: String, paramCount: Int): Method {
+        var clazz: Class<*>? = findClass(className)
+        while (clazz != null) {
+            val method = clazz.declaredMethods
+                .filter { it.name == methodName && it.parameterTypes.size == paramCount }
+                .sortedBy { it.parameterTypes.joinToString(",") { type -> type.name } + ":" + it.returnType.name }
+                .firstOrNull()
+            if (method != null) {
+                return method.apply { isAccessible = true }
+            }
+            clazz = clazz.superclass
+        }
+        throw NoSuchMethodException("$className.$methodName/$paramCount")
+    }
 
     /**
      * Every constructor taking [paramCount] parameters, in a deterministic order.

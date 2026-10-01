@@ -95,6 +95,7 @@ object HeadsetStateDispatcher : HookContext() {
                 )
                 registerAppRequestReceiver(context)
                 registerAclReceiver(context)
+                context?.let { probeInitialConnectedDevices(it) }
             }
         }.onFailure {
             Log.d("SonyPods-Engine", "AdapterService.onCreate hook skipped", it)
@@ -195,6 +196,10 @@ object HeadsetStateDispatcher : HookContext() {
                 if (now - lastAclRefreshMs < 2000L) return
                 lastAclRefreshMs = now
                 Log.d("SonyPods-Engine", "ACL ${if (connected) "connected" else "disconnected"} for Sony device ${device.address}; refreshing state")
+                if (connected && !SonyDeviceService.isLeAudioIdentity(device)) {
+                    SonyEngineHost.onLinkConnected(device.address)
+                    SonyEngineHost.connectDevice(device)
+                }
                 SonyEngineHost.refreshNow("bud-acl")
             }
         }
