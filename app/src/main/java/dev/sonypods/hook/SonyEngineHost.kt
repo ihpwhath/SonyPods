@@ -561,6 +561,10 @@ object SonyEngineHost {
         }
         val repo = repository ?: return
         val address = runCatching { device.address }.getOrNull() ?: return
+        if (!force && matchesReleasedHeadset(address)) {
+            Log.d(TAG, "connect skipped: $address was deliberately released by a device-level disconnect")
+            return
+        }
         // A headset-directed Tandem migration (0x0E) names the identity Tandem
         // moves to; connecting anything else in the window would fight it. The
         // repository clears the pending migration on completion or timeout.
@@ -645,6 +649,8 @@ object SonyEngineHost {
     }
 
     /** Whether [address] belongs to the headset this host deliberately released at the last device-level disconnect. */
+    fun isReleasedHeadset(address: String): Boolean = matchesReleasedHeadset(address)
+
     private fun matchesReleasedHeadset(address: String): Boolean {
         val released = releasedAddress ?: return false
         if (released.equals(address, ignoreCase = true)) return true

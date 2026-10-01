@@ -197,8 +197,11 @@ object HeadsetStateDispatcher : HookContext() {
                 lastAclRefreshMs = now
                 Log.d("SonyPods-Engine", "ACL ${if (connected) "connected" else "disconnected"} for Sony device ${device.address}; refreshing state")
                 if (connected && !SonyDeviceService.isLeAudioIdentity(device)) {
-                    SonyEngineHost.onLinkConnected(device.address)
-                    SonyEngineHost.connectDevice(device)
+                    if (!SonyEngineHost.isReleasedHeadset(device.address)) {
+                        SonyEngineHost.connectDevice(device)
+                    } else {
+                        Log.d("SonyPods-Engine", "ACL connected but skipped connectDevice: ${device.address} is held by deliberate release")
+                    }
                 }
                 SonyEngineHost.refreshNow("bud-acl")
             }
